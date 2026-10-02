@@ -32,6 +32,27 @@ final class Api {
             }
         } finally { conn.disconnect(); }
     }
+    static String resetLabel(Instant date) {
+        return DateTimeFormatter.ofPattern("EEEE, HH:mm",java.util.Locale.forLanguageTag("pl-PL")).withZone(ZoneId.systemDefault()).format(date);
+    }
+    static int level(JSONObject meter) throws Exception {
+        JSONArray windows=meter.getJSONArray("windows"); double peak=0;
+        for(int i=0;i<windows.length();i++) peak=Math.max(peak,windows.getJSONObject(i).getDouble("usedPercent"));
+        return peak>=100 ? 2 : peak>=80 ? 1 : 0;
+    }
+    static String cardText(JSONObject m) throws Exception {
+        StringBuilder result=new StringBuilder();JSONArray windows=m.getJSONArray("windows");
+        for(int i=0;i<windows.length();i++) {
+            JSONObject w=windows.getJSONObject(i);if(i>0)result.append("\n");
+            String label=w.getString("label");if(label.equals("weekly"))label="Tydzień";if(label.equals("subscription"))label="Abonament";
+            result.append(label).append(": ").append(Math.round(w.getDouble("usedPercent"))).append("% zużyte");
+            result.append("\n").append(w.isNull("resetsAt") ? "Brak daty resetu" : "Reset: "+resetLabel(Instant.parse(w.getString("resetsAt"))));
+        }
+        if(!m.isNull("balance")) { JSONObject b=m.getJSONObject("balance");result.append(String.format(java.util.Locale.ROOT,"%.2f %s pozostało",b.getDouble("amount"),b.getString("currency"))); }
+        if(result.length()==0)result.append("Brak danych");
+        if(m.optBoolean("stale"))result.append("\nDane nieaktualne");
+        return result.toString();
+    }
     static String render(JSONObject data) throws Exception {
         StringBuilder result = new StringBuilder(); JSONArray meters = data.getJSONArray("meters");
         for (int i=0;i<meters.length();i++) {
@@ -42,9 +63,8 @@ final class Api {
                 if(j>0)result.append("\n  ");
                 result.append(w.getString("label")).append(" ").append(Math.round(w.getDouble("usedPercent"))).append("% zużyte");
                 if(!w.isNull("resetsAt")) {
-                    Instant reset=Instant.parse(w.getString("resetsAt")); long minutes=Math.max(0,(reset.toEpochMilli()-System.currentTimeMillis())/60000);
-                    result.append("\n  reset za ").append(minutes/1440).append("d ").append(minutes%1440/60).append("h ").append(minutes%60).append("m · ")
-                        .append(DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.systemDefault()).format(reset));
+                    Instant reset=Instant.parse(w.getString("resetsAt"));
+                    result.append("\n  Reset: ").append(resetLabel(reset));
                 }
             }
             if(!m.isNull("balance")){JSONObject b=m.getJSONObject("balance");result.append(String.format(java.util.Locale.ROOT,"%.2f %s",b.getDouble("amount"),b.getString("currency")));}

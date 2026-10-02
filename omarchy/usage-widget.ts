@@ -1,45 +1,63 @@
 import type { Meter } from "../src/providers.ts";
-export function render(
-  meters: Meter[],
-  now = Date.now(),
-): { text: string; tooltip: string; class: string } {
+export function level(percent: number | null): string {
+  return percent !== null && percent >= 100
+    ? "critical"
+    : percent !== null && percent >= 80
+    ? "warning"
+    : "normal";
+}
+export function resetLabel(date: string): string {
+  return new Intl.DateTimeFormat("pl-PL", {
+    weekday: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date(date));
+}
+export function render(meters: Meter[], _now = Date.now()) {
   const known = meters.flatMap((m) => m.windows.map((w) => w.usedPercent));
   const worst = known.length ? Math.max(...known) : null;
-  const tooltip = meters.map((m) => {
+  const cards = meters.map((m) => {
+    const peak = m.windows.length
+      ? Math.max(...m.windows.map((w) => w.usedPercent))
+      : null;
     const lines = m.windows.map((w) => {
-      const seconds = w.resetsAt
-        ? Math.max(0, Math.ceil((Date.parse(w.resetsAt) - now) / 1000))
-        : null;
-      const reset = seconds === null
-        ? "brak daty resetu"
-        : `reset za ${Math.floor(seconds / 86400)}d ${
-          Math.floor(seconds % 86400 / 3600)
-        }h ${Math.floor(seconds % 3600 / 60)}m (${
-          new Date(w.resetsAt!).toLocaleString()
-        })`;
-      return `${w.label}: ${w.usedPercent}% zużyte · ${reset}`;
+      const window = w.label === "weekly"
+        ? "Tydzień"
+        : w.label === "subscription"
+        ? "Abonament"
+        : w.label;
+      return window + ": " + w.usedPercent + "% zużyte" + "\n" +
+        (w.resetsAt ? "Reset: " + resetLabel(w.resetsAt) : "Brak daty resetu");
     });
     if (m.balance) {
-      lines.push(`${m.balance.amount.toFixed(2)} ${m.balance.currency}`);
+      lines.push(
+        m.balance.amount.toFixed(2) + " " + m.balance.currency + " pozostało",
+      );
     }
-    if (!lines.length) lines.push("brak danych");
-    lines.push(
-      `aktualizacja: ${
-        m.updatedAt ? new Date(m.updatedAt).toLocaleString() : "—"
-      }`,
-    );
-    if (m.stale) lines.push("dane nieaktualne");
-    if (m.error) lines.push(m.error);
-    return `${m.label}\n${lines.join("\n")}`;
-  }).join("\n\n");
+    if (!lines.length) lines.push("Brak danych");
+    if (m.stale) lines.push("Dane nieaktualne");
+    const updated = m.updatedAt
+      ? new Date(m.updatedAt).toLocaleTimeString("pl-PL", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+      : "—";
+    return {
+      id: m.id,
+      label: m.label,
+      value: lines.join("\n"),
+      updated: "Stan: " + updated,
+      level: level(peak),
+    };
+  });
   return {
-    text: worst === null ? "AI —" : `AI ${Math.round(worst)}%`,
-    tooltip,
-    class: meters.some((m) => m.stale && m.updatedAt)
-      ? "stale"
-      : worst !== null && worst >= 90
-      ? "warning"
-      : "normal",
+    text: worst === null ? "AI —" : "AI " + Math.round(worst) + "%",
+    tooltip: cards.map((c) => c.label + "\n" + c.value + "\n" + c.updated).join(
+      "\n\n",
+    ),
+    class: level(worst),
+    cards,
   };
 }
 if (import.meta.main) {

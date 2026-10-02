@@ -1,7 +1,13 @@
-import { empty, parseBalance, parseCodex, parseGrok } from "./providers.ts";
+import {
+  empty,
+  parseBalance,
+  parseCodex,
+  parseGreenBalance,
+  parseGrok,
+} from "./providers.ts";
 import { Cache } from "./cache.ts";
 import { handler, hash } from "./http.ts";
-import { render } from "../omarchy/usage-widget.ts";
+import { level, render, resetLabel } from "../omarchy/usage-widget.ts";
 function assert(value: unknown, message = "Assertion failed"): asserts value {
   if (!value) throw new Error(message);
 }
@@ -103,5 +109,42 @@ Deno.test("API requires Basic Auth for every route and never polls on requests",
 });
 Deno.test("widget does not show missing readings as zero", () => {
   const r = render([empty("greenpt", "not_implemented_in_operators")]);
-  assert(r.text === "AI —" && r.tooltip.includes("brak danych"));
+  assert(r.text === "AI —" && r.tooltip.includes("Brak danych"));
+});
+
+Deno.test("GreenPT balance requires a numeric response header and preserves zero", () => {
+  assert(parseGreenBalance("0") === 0);
+  assert(parseGreenBalance("0.952105264") === 0.952105264);
+  for (const value of [null, "", " ", "unknown", "Infinity"]) {
+    let rejected = false;
+    try {
+      parseGreenBalance(value);
+    } catch {
+      rejected = true;
+    }
+    assert(rejected, "Invalid balance must not become zero");
+  }
+});
+Deno.test("provider cards have individual 80/100 thresholds and weekday reset", () => {
+  assert(
+    level(79) === "normal" && level(80) === "warning" &&
+      level(99) === "warning",
+  );
+  assert(
+    level(100) === "critical" && level(101) === "critical" &&
+      level(null) === "normal",
+  );
+  const r = render(
+    [0, 80, 100].map((p) => ({
+      ...empty("codex"),
+      windows: [{
+        label: "weekly",
+        usedPercent: p,
+        resetsAt: "2026-10-07T07:51:00Z",
+      }],
+    })),
+  );
+  assert(r.cards.map((c) => c.level).join() === "normal,warning,critical");
+  assert(r.class === "critical" && r.cards[0].value.includes("Reset: "));
+  assert(/^[^,]+, \d{2}:\d{2}$/.test(resetLabel("2026-10-07T07:51:00Z")));
 });

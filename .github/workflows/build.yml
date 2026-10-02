@@ -79,3 +79,9 @@ jobs:
             adb shell am instrument -w dev.archea.usage.test/android.test.InstrumentationTestRunner | tee instrumentation.txt
             adb logcat -d -b crash
             grep -q 'OK (' instrumentation.txt
+            adb pull /sdcard/Android/data/dev.archea.usage/files/widget.png widget.png
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-widget-preview
+          path: widget.png

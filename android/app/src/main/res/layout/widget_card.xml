@@ -1,0 +1,7 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+ android:id="@+id/card" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
+ android:layout_margin="4dp" android:orientation="vertical" android:padding="10dp" android:background="@drawable/card_normal">
+ <TextView android:id="@+id/provider_name" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#8ed3ff" android:textSize="15sp" android:textStyle="bold"/>
+ <TextView android:id="@+id/provider_value" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="6dp" android:textColor="#eeeeee" android:textSize="13sp"/>
+ <TextView android:id="@+id/provider_updated" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="6dp" android:textColor="#a9b6c3" android:textSize="10sp"/>
+</LinearLayout>

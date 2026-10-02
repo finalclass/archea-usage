@@ -17,7 +17,7 @@ public class RefreshJob extends JobService {
     static void cancel(Context c) { c.getSystemService(JobScheduler.class).cancelAll(); }
     @Override public boolean onStartJob(JobParameters p) {
         task=executor.submit(()->{
-            try { String text=Api.render(Api.fetch(this));getSharedPreferences("usage",MODE_PRIVATE).edit().putString("readings",text).remove("error").commit(); }
+            try { org.json.JSONObject data=Api.fetch(this);Api.render(data);getSharedPreferences("usage",MODE_PRIVATE).edit().putString("snapshot",data.toString()).remove("error").commit(); }
             catch(Exception e) { getSharedPreferences("usage",MODE_PRIVATE).edit().putString("error","Nie udało się odświeżyć. Sprawdź połączenie i ustawienia API.").commit(); }
             UsageWidget.draw(this);jobFinished(p,false);
         });return true;

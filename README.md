@@ -1,12 +1,15 @@
 # Archea Usage
 
 One self-hosted Deno service for Grok subscription usage, Codex quota windows,
-and OpenRouter account credit balance. Includes an Omarchy Quickshell plugin and
+OpenRouter and GreenPT account credit balances. Includes an Omarchy Quickshell plugin and
 a native Android home-screen widget. No CodexBar dependency.
 
 Provider collectors adapted from `fc/operators/src/usage.ts` at `dcc7c0e`.
-GreenPT in that revision is a placeholder; this service reports it as
-unavailable. Provider endpoints for Grok/Codex are internal and can change.
+GreenPT uses the workaround recommended by support on 23 September 2026:
+a minimal `green-l-raw` completion (`.` and `max_tokens: 1`), then reads
+`X-Credits-Remaining` as the prepaid euro balance. Each scheduled refresh
+therefore incurs a small inference charge. Clients share the cached result.
+A missing/invalid header is an error, never a zero balance. Provider endpoints for Grok/Codex are internal and can change.
 Credentials are read from the owner's existing CLI login files and are never
 returned by the API. The service does not refresh or rewrite those login files;
 renew expired logins using the provider CLI. Grok's reported billing period end
@@ -45,8 +48,11 @@ deno run --allow-env=HOME --allow-read --allow-write omarchy/install.ts
 Fill `~/.config/archea-usage/client.json` with `url`, `username`, `password`;
 keep mode 600. Enable using `omarchy plugin enable archea.usage` and restart the
 shell when required. The plugin uses the existing Deno runtime, polls only our
-API every five minutes, and displays all provider readings/reset countdowns in
-its popup. Click again or click the popup to dismiss. No provider secrets on the
+API every five minutes. Right-click opens four provider cards; right-click
+again closes them. Left-click on the bar widget or a card opens
+`https://szymon.archea.dev`. Resets use the local device timezone and Polish
+weekday/hour format, for example `środa, 07:51`. Each provider card turns yellow
+at 80% usage and red at 100%; prepaid balances have no invented quota threshold. No provider secrets on the
 desktop. Configuration is separate from the downloadable plugin.
 
 ## Android
@@ -60,8 +66,10 @@ retain the cached readings and visibly report the error.
 
 The Android scheduler refreshes approximately every 15 minutes, subject to
 Android battery/Doze scheduling. Tap “Odśwież” for an immediate scheduled
-refresh; the API itself still polls providers every five minutes. Tap the title
-for settings. Widget size is adjustable. No analytics or external SDKs.
+refresh; the API itself still polls providers every five minutes. Tap a card
+or the title to open `https://szymon.archea.dev`; the separate settings button
+opens configuration. A two-column card grid uses the same 80%/100% colors and
+local weekday/time format as Omarchy. Widget size is adjustable. No analytics or external SDKs.
 
 GitHub Actions builds with JDK 17, Gradle 8.11.1, AGP 8.9.2 and SDK 35, runs
 lint and Android emulator instrumentation tests, and uploads a signed APK.

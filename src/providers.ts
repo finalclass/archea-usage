@@ -71,6 +71,14 @@ export function parseBalance(data: any): number {
   }
   return Math.round((d.total_credits - d.total_usage) * 100) / 100;
 }
+export function parseGreenBalance(header: string | null): number {
+  if (
+    header === null || header.trim() === "" || !Number.isFinite(Number(header))
+  ) {
+    throw new Error("invalid_response");
+  }
+  return Number(header);
+}
 async function get(url: string, headers: Record<string, string>): Promise<any> {
   const r = await fetch(url, {
     headers,
@@ -124,7 +132,33 @@ export async function collect(id: string, home: string): Promise<Meter> {
       ),
       currency: "USD",
     };
-  } else return empty(id, "not_implemented_in_operators");
+  } else if (id === "greenpt") {
+    const auth = await read(".local/share/opencode/auth.json");
+    if (!auth.greenpt?.key) throw new Error("login_required");
+    // Support's recommended balance probe: one input character, one output token.
+    // Runs only during scheduled cache refresh, never on a client request.
+    const response = await fetch("https://api.greenpt.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${auth.greenpt.key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "green-l-raw",
+        messages: [{ role: "user", content: "." }],
+        max_tokens: 1,
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(15000),
+      redirect: "error",
+    });
+    await response.body?.cancel();
+    if (!response.ok) throw new Error(`provider_http_${response.status}`);
+    m.balance = {
+      amount: parseGreenBalance(response.headers.get("X-Credits-Remaining")),
+      currency: "EUR",
+    };
+  } else return empty(id, "unknown_provider");
   return {
     ...m,
     updatedAt: new Date().toISOString(),
