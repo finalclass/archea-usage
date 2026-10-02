@@ -44,11 +44,13 @@ public class UsageTest extends InstrumentationTestCase {
             });
             getInstrumentation().waitForIdleSync();
             Thread.sleep(1000);
+            final String[] displayed=new String[1];
             getInstrumentation().runOnMainSync(()->{
                 TextView readings=view[0].findViewById(R.id.readings);
-                assertNotNull("RemoteViews inflated",readings);
-                assertTrue(readings.getText().toString().contains("54%"));
+                displayed[0]=readings==null ? null : readings.getText().toString();
             });
+            assertNotNull("RemoteViews inflated",displayed[0]);
+            assertTrue("Reading visible: "+displayed[0],displayed[0].contains("54%"));
         } finally {
             host.deleteAppWidgetId(widgetId);host.stopListening();RefreshJob.cancel(context);
             getInstrumentation().runOnMainSync(activity::finish);

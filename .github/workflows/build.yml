@@ -77,4 +77,5 @@ jobs:
             adb install test-apks/androidTest/debug/app-debug-androidTest.apk
             adb shell appwidget grantbind --package dev.archea.usage --user 0
             adb shell am instrument -w dev.archea.usage.test/android.test.InstrumentationTestRunner | tee instrumentation.txt
+            adb logcat -d -b crash
             grep -q 'OK (' instrumentation.txt
