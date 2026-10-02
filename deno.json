@@ -1,0 +1,7 @@
+{
+  "tasks": {
+    "test": "deno test --allow-read",
+    "check": "deno check serve.ts omarchy/usage-widget.ts",
+    "serve": "deno run --allow-env=USAGE_CONFIG --allow-read --allow-net serve.ts"
+  }
+}

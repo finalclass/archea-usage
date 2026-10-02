@@ -1,0 +1,26 @@
+plugins { id 'com.android.application' }
+android {
+    useLibrary 'android.test.runner'
+    useLibrary 'android.test.base'
+    namespace 'dev.archea.usage'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'dev.archea.usage'
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName '1.0.0'
+        testInstrumentationRunner 'android.test.InstrumentationTestRunner'
+    }
+    signingConfigs {
+        release {
+            storeFile file(System.getenv('SIGNING_STORE') ?: 'unused.p12')
+            storePassword System.getenv('SIGNING_PASSWORD')
+            keyAlias 'usage'
+            keyPassword System.getenv('SIGNING_PASSWORD')
+            storeType 'PKCS12'
+        }
+    }
+    buildTypes { release { signingConfig signingConfigs.release; minifyEnabled false } }
+    lint { abortOnError true; disable 'HardcodedText', 'SetTextI18n', 'UnusedResources' }
+}

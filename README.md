@@ -1,0 +1,77 @@
+# Archea Usage
+
+One self-hosted Deno service for Grok subscription usage, Codex quota windows,
+and OpenRouter account credit balance. Includes an Omarchy Quickshell plugin and
+a native Android home-screen widget. No CodexBar dependency.
+
+Provider collectors adapted from `fc/operators/src/usage.ts` at `dcc7c0e`.
+GreenPT in that revision is a placeholder; this service reports it as
+unavailable. Provider endpoints for Grok/Codex are internal and can change.
+Credentials are read from the owner's existing CLI login files and are never
+returned by the API. The service does not refresh or rewrite those login files;
+renew expired logins using the provider CLI. Grok's reported billing period end
+is returned without inventing a reset date. OpenRouter balance is not a weekly
+subscription quota.
+
+## API
+
+`GET /v1/usage` returns a versioned JSON snapshot. Provider polling runs every
+300 seconds, independently of client requests. Failed polls retain the last
+successful reading with `stale: true` and a sanitized error. Missing values are
+null/unavailable, never fabricated zero values. Times are UTC ISO 8601.
+
+All routes require HTTP Basic Authentication, including `/health`, `/`, and:
+
+- `/downloads/omarchy.tar.gz`
+- `/downloads/android.apk`
+
+The server binds only to loopback. Expose it through an HTTPS reverse proxy. Do
+not enable access logging with Authorization headers. The public source
+repository contains no account configuration or credentials.
+
+Run `deno task check` and `deno task test`. Set `USAGE_CONFIG` to a private JSON
+file with `credentials: {username, passwordHash}` (SHA-256 of a strong generated
+password), `providerHome`, `downloads`, `port` (default 7350), and
+`intervalSeconds` (default 300). Run `deno task serve`.
+
+## Omarchy
+
+Download and extract the authenticated `/downloads/omarchy.tar.gz`, then:
+
+```
+deno run --allow-env=HOME --allow-read --allow-write omarchy/install.ts
+```
+
+Fill `~/.config/archea-usage/client.json` with `url`, `username`, `password`;
+keep mode 600. Enable using `omarchy plugin enable archea.usage` and restart the
+shell when required. The plugin uses the existing Deno runtime, polls only our
+API every five minutes, and displays all provider readings/reset countdowns in
+its popup. Click again or click the popup to dismiss. No provider secrets on the
+desktop. Configuration is separate from the downloadable plugin.
+
+## Android
+
+Install `/downloads/android.apk` (Android 8+), open Archea Usage, set the HTTPS
+base URL and Basic Auth login/password, and tap “Zapisz i sprawdź połączenie”.
+Then add the Archea Usage widget to the launcher. Credentials are encrypted with
+Android Keystore AES-GCM; backups and cleartext HTTP are disabled. Redirects are
+rejected so credentials cannot be forwarded to another host. Failed requests
+retain the cached readings and visibly report the error.
+
+The Android scheduler refreshes approximately every 15 minutes, subject to
+Android battery/Doze scheduling. Tap “Odśwież” for an immediate scheduled
+refresh; the API itself still polls providers every five minutes. Tap the title
+for settings. Widget size is adjustable. No analytics or external SDKs.
+
+GitHub Actions builds with JDK 17, Gradle 8.11.1, AGP 8.9.2 and SDK 35, runs
+lint and Android emulator instrumentation tests, and uploads a signed APK.
+Signing keys are private GitHub Actions secrets (`ANDROID_KEYSTORE` base64
+PKCS12, `ANDROID_SIGNING_PASSWORD`), never committed. Keep that key for future
+upgrades.
+
+## Deployment and rollback
+
+See `deployment/` for the unit and proxy template. Stop/disable only
+`archea-usage.service`, remove only its Caddy site, validate/reload Caddy, and
+remove only the `usageproxy` Incus proxy device to roll back. Preserve the
+private credentials/signing key and avoid changing Operators or T3.

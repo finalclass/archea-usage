@@ -1,0 +1,24 @@
+[Unit]
+Description=Archea AI usage API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=sel
+Group=sel
+Environment=HOME=/home/sel
+Environment=USAGE_CONFIG=/home/sel/.config/archea-usage/server.json
+WorkingDirectory=/home/sel/usage-meter
+ExecStart=/usr/local/bin/deno run --no-config --allow-env=USAGE_CONFIG --allow-read=/home/sel/usage-meter,/home/sel/.config/archea-usage/server.json,/home/sel/.grok/auth.json,/home/sel/.codex/auth.json,/home/sel/.local/share/opencode/auth.json --allow-net=127.0.0.1:7350,cli-chat-proxy.grok.com:443,chatgpt.com:443,openrouter.ai:443 /home/sel/usage-meter/serve.ts
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+RestrictSUIDSGID=true
+UMask=0077
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

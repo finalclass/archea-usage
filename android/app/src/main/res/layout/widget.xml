@@ -1,0 +1,16 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent" android:layout_height="match_parent"
+  android:orientation="vertical" android:padding="12dp"
+  android:background="#101820">
+  <TextView android:id="@+id/title" android:layout_width="match_parent"
+    android:layout_height="wrap_content" android:text="Zużycie AI · ustawienia"
+    android:textColor="#8ed3ff" android:textSize="16sp"
+    android:paddingBottom="8dp" />
+  <TextView android:id="@+id/readings" android:layout_width="match_parent"
+    android:layout_height="0dp" android:layout_weight="1"
+    android:text="Otwórz Archea Usage i skonfiguruj API"
+    android:textColor="#eeeeee" android:textSize="13sp" />
+  <TextView android:id="@+id/refresh" android:layout_width="match_parent"
+    android:layout_height="wrap_content" android:text="Odśwież ↻"
+    android:textColor="#8ed3ff" android:paddingTop="8dp" />
+</LinearLayout>

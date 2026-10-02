@@ -1,0 +1,8 @@
+downloads/
+*.apk
+*.jks
+*.keystore
+*.local.json
+android/.gradle/
+android/local.properties
+android/**/build/

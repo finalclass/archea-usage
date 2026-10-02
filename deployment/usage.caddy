@@ -1,0 +1,7 @@
+usage.szymon.archea.dev {
+    reverse_proxy 127.0.0.1:7350
+    header {
+        X-Robots-Tag "noindex, nofollow"
+        Strict-Transport-Security "max-age=31536000"
+    }
+}

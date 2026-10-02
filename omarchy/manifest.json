@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "archea.usage",
+  "name": "Archea Usage",
+  "version": "1.0.0",
+  "author": "finalclass",
+  "license": "MIT",
+  "description": "Zużycie AI z własnego API Archea",
+  "kinds": ["bar-widget"],
+  "activation": "on-demand",
+  "entryPoints": { "barWidget": "Panel.qml" },
+  "barWidget": {
+    "displayName": "Archea Usage",
+    "description": "Limity, saldo i resety AI",
+    "category": "AI",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
