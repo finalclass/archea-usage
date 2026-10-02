@@ -3,6 +3,12 @@ import android.test.InstrumentationTestCase;
 import android.content.Context;
 import android.content.Intent;
 import android.app.Activity;
+import android.appwidget.AppWidgetHost;
+import android.appwidget.AppWidgetManager;
+import android.appwidget.AppWidgetHostView;
+import android.content.ComponentName;
+import android.view.ViewGroup;
+import android.widget.TextView;
 import org.json.JSONObject;
 
 public class UsageTest extends InstrumentationTestCase {
@@ -19,10 +25,33 @@ public class UsageTest extends InstrumentationTestCase {
         assertTrue(text.contains("GreenPT: brak danych"));assertTrue(text.contains("weekly 0%"));assertTrue(text.contains("reset za"));
     }
     public void testSettingsAndWidgetRendering() throws Exception {
-        Intent intent=new Intent(getInstrumentation().getTargetContext(),SettingsActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        Context context=getInstrumentation().getTargetContext();
+        Intent intent=new Intent(context,SettingsActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         Activity activity=getInstrumentation().startActivitySync(intent);
         assertNotNull(activity);
-        getInstrumentation().runOnMainSync(()->UsageWidget.draw(getInstrumentation().getTargetContext()));
-        getInstrumentation().runOnMainSync(activity::finish);
+        AppWidgetHost host=new AppWidgetHost(context,99);
+        int widgetId=host.allocateAppWidgetId();
+        try {
+            AppWidgetManager manager=AppWidgetManager.getInstance(context);
+            assertTrue("Launcher bind permission needed",manager.bindAppWidgetIdIfAllowed(widgetId,new ComponentName(context,UsageWidget.class)));
+            context.getSharedPreferences("usage",Context.MODE_PRIVATE).edit().putString("readings","Codex: weekly 54% zużyte").remove("error").commit();
+            final AppWidgetHostView[] view=new AppWidgetHostView[1];
+            getInstrumentation().runOnMainSync(()->{
+                host.startListening();
+                view[0]=host.createView(activity,widgetId,manager.getAppWidgetInfo(widgetId));
+                ((ViewGroup)activity.findViewById(android.R.id.content)).addView(view[0]);
+                UsageWidget.draw(context);
+            });
+            getInstrumentation().waitForIdleSync();
+            Thread.sleep(1000);
+            getInstrumentation().runOnMainSync(()->{
+                TextView readings=view[0].findViewById(R.id.readings);
+                assertNotNull("RemoteViews inflated",readings);
+                assertTrue(readings.getText().toString().contains("54%"));
+            });
+        } finally {
+            host.deleteAppWidgetId(widgetId);host.stopListening();RefreshJob.cancel(context);
+            getInstrumentation().runOnMainSync(activity::finish);
+        }
     }
 }

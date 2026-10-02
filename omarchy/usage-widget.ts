@@ -46,7 +46,9 @@ if (import.meta.main) {
   const home = Deno.env.get("HOME")!;
   try {
     const c = JSON.parse(
-      await Deno.readTextFile(`${home}/.config/archea-usage/client.json`),
+      await Deno.readTextFile(
+        Deno.args[0] ?? `${home}/.config/archea-usage/client.json`,
+      ),
     );
     const url = new URL("/v1/usage", c.url);
     if (url.protocol !== "https:") throw new Error("HTTPS required");
