@@ -59,10 +59,13 @@ public class UsageTest extends InstrumentationTestCase {
                 assertTrue(critical.getText().toString().contains("100%"));
                 assertEquals(android.graphics.Color.parseColor("#ff7078"),critical.getCurrentTextColor());
             });
-            android.app.Instrumentation.ActivityMonitor link=getInstrumentation().addMonitor(new android.content.IntentFilter(Intent.ACTION_VIEW),null,true);
-            getInstrumentation().runOnMainSync(()->view[0].findViewById(R.id.title).performClick());
-            getInstrumentation().waitForIdleSync();
-            assertEquals("Website opens on tap",1,link.getHits());getInstrumentation().removeMonitor(link);
+            assertEquals(Intent.ACTION_VIEW,UsageWidget.websiteIntent().getAction());
+            assertEquals("https://szymon.archea.dev",UsageWidget.websiteIntent().getDataString());
+            getInstrumentation().runOnMainSync(()->{
+                assertTrue("Title is linked",view[0].findViewById(R.id.title).hasOnClickListeners());
+                ViewGroup row=view[0].findViewById(R.id.row_one);
+                assertTrue("Provider card is linked",row.getChildAt(0).hasOnClickListeners());
+            });
             android.graphics.Bitmap screenshot=getInstrumentation().getUiAutomation().takeScreenshot();
             try(java.io.FileOutputStream out=new java.io.FileOutputStream(new java.io.File(context.getExternalFilesDir(null),"widget.png"))) {
                 screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);

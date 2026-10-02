@@ -13,11 +13,12 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class UsageWidget extends AppWidgetProvider {
+    static Intent websiteIntent() { return new Intent(Intent.ACTION_VIEW,Uri.parse("https://szymon.archea.dev")); }
     static void draw(Context c) {
         AppWidgetManager manager=AppWidgetManager.getInstance(c);
         String snapshot=c.getSharedPreferences("usage",Context.MODE_PRIVATE).getString("snapshot","");
         String error=c.getSharedPreferences("usage",Context.MODE_PRIVATE).getString("error","");
-        PendingIntent website=PendingIntent.getActivity(c,3,new Intent(Intent.ACTION_VIEW,Uri.parse("https://szymon.archea.dev")),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent website=PendingIntent.getActivity(c,3,websiteIntent(),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         for(int id:manager.getAppWidgetIds(new ComponentName(c,UsageWidget.class))) {
             RemoteViews views=new RemoteViews(c.getPackageName(),R.layout.widget);
             views.removeAllViews(R.id.row_one);views.removeAllViews(R.id.row_two);
