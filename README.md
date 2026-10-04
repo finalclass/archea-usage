@@ -66,10 +66,13 @@ rejected so credentials cannot be forwarded to another host. Failed requests
 retain the cached readings and visibly report the error.
 
 The Android scheduler refreshes approximately every 15 minutes, subject to
-Android battery/Doze scheduling. Tap “Odśwież” for an immediate scheduled
-refresh; the API itself still polls providers every five minutes. Tap a card
+Android battery/Doze scheduling. The 48 dp “Odśwież” button immediately shows a
+spinner and “Odświeżanie…” until the scheduled request finishes (at least 750 ms).
+Manual requests also run offline to report a connection error instead of waiting
+indefinitely; repeated taps during a refresh do not enqueue more requests.
+The API itself still polls providers every five minutes. Tap a card
 or the title to open `https://szymon.archea.dev`; the separate settings button
-opens configuration. A two-column card grid matches Omarchy: a limit bar for
+opens configuration. The widget background does not open the website. A two-column card grid matches Omarchy: a limit bar for
 quota, the remaining amount for a prepaid balance, the same 80%/100% colors, and
 the local weekday/time format. Widget size is adjustable. No analytics or external SDKs.
 

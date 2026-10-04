@@ -32,6 +32,7 @@ public class UsageTest extends InstrumentationTestCase {
         AppWidgetHost host=new AppWidgetHost(context,99);
         int widgetId=host.allocateAppWidgetId();
         try {
+            Secrets.save(context,"{\"url\":\"http://example.com\",\"username\":\"usage\",\"password\":\"test-secret\"}");
             AppWidgetManager manager=AppWidgetManager.getInstance(context);
             assertTrue("Launcher bind permission needed",manager.bindAppWidgetIdIfAllowed(widgetId,new ComponentName(context,UsageWidget.class)));
             String snapshot="{\"meters\":["+meter("Grok",79)+","+meter("Codex",80)+","+meter("GreenPT",100)+","+balance()+"]}";
@@ -79,18 +80,49 @@ public class UsageTest extends InstrumentationTestCase {
             assertEquals(Intent.ACTION_VIEW,UsageWidget.websiteIntent().getAction());
             assertEquals("https://szymon.archea.dev",UsageWidget.websiteIntent().getDataString());
             getInstrumentation().runOnMainSync(()->{
+                assertFalse("Widget background must not open T3",view[0].findViewById(R.id.widget_root).hasOnClickListeners());
                 assertTrue("Title is linked",view[0].findViewById(R.id.title).hasOnClickListeners());
                 ViewGroup row=view[0].findViewById(R.id.row_one);
                 assertTrue("Provider card is linked",row.getChildAt(0).hasOnClickListeners());
+                android.view.View refresh=view[0].findViewById(R.id.refresh);
+                assertTrue("Refresh touch target is at least 48dp",refresh.getHeight()>=Math.round(48*context.getResources().getDisplayMetrics().density));
+                assertTrue("Refresh is linked",refresh.hasOnClickListeners());
             });
             android.graphics.Bitmap screenshot=getInstrumentation().getUiAutomation().takeScreenshot();
             try(java.io.FileOutputStream out=new java.io.FileOutputStream(new java.io.File(context.getExternalFilesDir(null),"widget.png"))) {
                 screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);
             }
+            RefreshJob.cancel(context);
+            waitForRefresh(view[0],false,10000);
+            // A local invalid URL fails immediately without depending on an external API or connectivity.
+            Secrets.save(context,"{\"url\":\"http://example.com\",\"username\":\"usage\",\"password\":\"test-secret\"}");
+            getInstrumentation().runOnMainSync(()->assertTrue(view[0].findViewById(R.id.refresh).performClick()));
+            waitForRefresh(view[0],true,3000);
+            waitForRefresh(view[0],false,10000);
+            assertEquals("A failed refresh retains the cards",snapshot,context.getSharedPreferences("usage",Context.MODE_PRIVATE).getString("snapshot",""));
+            getInstrumentation().runOnMainSync(()->{
+                assertTrue(((TextView)view[0].findViewById(R.id.readings)).getText().toString().startsWith("Nie udało się odświeżyć."));
+                assertEquals("Odśwież",((TextView)view[0].findViewById(R.id.refresh_label)).getText().toString());
+                assertFalse("Refresh keeps the settings activity open",activity.isFinishing());
+            });
         } finally {
             host.deleteAppWidgetId(widgetId);host.stopListening();RefreshJob.cancel(context);
             getInstrumentation().runOnMainSync(activity::finish);
         }
+    }
+    private void waitForRefresh(AppWidgetHostView view,boolean loading,long timeout) throws Exception {
+        long deadline=android.os.SystemClock.elapsedRealtime()+timeout;
+        while(android.os.SystemClock.elapsedRealtime()<deadline) {
+            final boolean[] matches=new boolean[1];
+            getInstrumentation().runOnMainSync(()->{
+                boolean visible=view.findViewById(R.id.refresh_progress).getVisibility()==android.view.View.VISIBLE;
+                String label=((TextView)view.findViewById(R.id.refresh_label)).getText().toString();
+                matches[0]=visible==loading && label.equals(loading?"Odświeżanie…":"Odśwież");
+            });
+            if(matches[0])return;
+            Thread.sleep(20);
+        }
+        fail("Refresh did not enter "+(loading?"loading":"idle")+" state");
     }
     static String meter(String name,int percent) {
         return "{\"label\":\""+name+"\",\"windows\":[{\"label\":\"weekly\",\"usedPercent\":"+percent+",\"resetsAt\":\"2026-10-07T07:51:00Z\"}],\"balance\":null,\"updatedAt\":\"2026-10-02T00:00:00Z\",\"stale\":false}";

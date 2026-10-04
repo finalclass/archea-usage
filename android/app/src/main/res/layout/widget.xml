@@ -10,5 +10,13 @@
     <ImageView android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="10dp" android:layout_marginBottom="10dp" android:background="#243444" android:contentDescription="@null"/>
     <LinearLayout android:id="@+id/row_one" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal"/>
     <LinearLayout android:id="@+id/row_two" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal" android:layout_marginTop="8dp"/>
-    <TextView android:id="@+id/refresh" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="end" android:text="Odśwież" android:textColor="#8fa1b3" android:textSize="12sp" android:paddingTop="8dp"/>
+    <LinearLayout android:id="@+id/refresh" android:layout_width="match_parent" android:layout_height="48dp"
+        android:orientation="horizontal" android:gravity="center_vertical|end" android:paddingLeft="12dp" android:paddingRight="12dp"
+        android:background="?android:attr/selectableItemBackground" android:contentDescription="Odśwież dane">
+        <ProgressBar android:id="@+id/refresh_progress" style="@android:style/Widget.Material.ProgressBar.Small"
+            android:layout_width="20dp" android:layout_height="20dp" android:layout_marginRight="8dp"
+            android:indeterminate="true" android:visibility="gone"/>
+        <TextView android:id="@+id/refresh_label" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Odśwież" android:textColor="#8ed3ff" android:textSize="12sp"/>
+    </LinearLayout>
 </LinearLayout>

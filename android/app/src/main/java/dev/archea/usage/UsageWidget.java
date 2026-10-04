@@ -141,10 +141,14 @@ public class UsageWidget extends AppWidgetProvider {
             views.setTextViewText(R.id.readings,status);
             views.setTextColor(R.id.readings,statusColor);
             views.setViewVisibility(R.id.readings,status.isEmpty()?View.GONE:View.VISIBLE);
-            views.setOnClickPendingIntent(R.id.widget_root,website);views.setOnClickPendingIntent(R.id.title,website);
+            views.setOnClickPendingIntent(R.id.title,website);
             views.setOnClickPendingIntent(R.id.settings,PendingIntent.getActivity(c,0,new Intent(c,SettingsActivity.class),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE));
             Intent refresh=new Intent(c,UsageWidget.class).setAction("dev.archea.usage.REFRESH");
             views.setOnClickPendingIntent(R.id.refresh,PendingIntent.getBroadcast(c,1,refresh,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE));
+            boolean refreshing=RefreshJob.isRefreshing();
+            views.setViewVisibility(R.id.refresh_progress,refreshing?View.VISIBLE:View.GONE);
+            views.setTextViewText(R.id.refresh_label,refreshing?"Odświeżanie…":"Odśwież");
+            views.setContentDescription(R.id.refresh,refreshing?"Odświeżanie danych":"Odśwież dane");
             manager.updateAppWidget(id,views);
         }
     }
