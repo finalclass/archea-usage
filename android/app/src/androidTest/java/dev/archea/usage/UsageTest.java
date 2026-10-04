@@ -35,6 +35,12 @@ public class UsageTest extends InstrumentationTestCase {
             Secrets.save(context,"{\"url\":\"http://example.com\",\"username\":\"usage\",\"password\":\"test-secret\"}");
             AppWidgetManager manager=AppWidgetManager.getInstance(context);
             assertTrue("Launcher bind permission needed",manager.bindAppWidgetIdIfAllowed(widgetId,new ComponentName(context,UsageWidget.class)));
+            // Let the initial widget update complete before installing the rendering fixture.
+            Thread.sleep(1000);
+            RefreshJob.cancel(context);
+            long idleDeadline=android.os.SystemClock.elapsedRealtime()+3000;
+            while(RefreshJob.isRefreshing() && android.os.SystemClock.elapsedRealtime()<idleDeadline)Thread.sleep(20);
+            assertFalse("Initial refresh stopped",RefreshJob.isRefreshing());
             String snapshot="{\"meters\":["+meter("Grok",79)+","+meter("Codex",80)+","+meter("GreenPT",100)+","+balance()+"]}";
             context.getSharedPreferences("usage",Context.MODE_PRIVATE).edit().putString("snapshot",snapshot).remove("error").commit();
             final AppWidgetHostView[] view=new AppWidgetHostView[1];
