@@ -48,11 +48,12 @@ deno run --allow-env=HOME --allow-read --allow-write omarchy/install.ts
 Fill `~/.config/archea-usage/client.json` with `url`, `username`, `password`;
 keep mode 600. Enable using `omarchy plugin enable archea.usage` and restart the
 shell when required. The plugin uses the existing Deno runtime, polls only our
-API every five minutes. Right-click opens four provider cards; right-click
-again closes them. Left-click on the bar widget or a card opens
-`https://szymon.archea.dev`. Resets use the local device timezone and Polish
-weekday/hour format, for example `środa, 07:51`. Each provider card turns yellow
-at 80% usage and red at 100%; prepaid balances have no invented quota threshold. No provider secrets on the
+API every five minutes. Left or right click on the bar icon toggles the cards.
+The close button hides them. Resets use the local device timezone and Polish
+weekday/hour format, for example `środa, 07:51`. Each quota card shows a limit
+bar and turns yellow at 80% usage and red at 100%. A prepaid balance shows the
+remaining amount, with no invented quota threshold. The bar icon keeps the bar
+color until one of those thresholds. No provider secrets on the
 desktop. Configuration is separate from the downloadable plugin.
 
 ## Android
@@ -68,8 +69,9 @@ The Android scheduler refreshes approximately every 15 minutes, subject to
 Android battery/Doze scheduling. Tap “Odśwież” for an immediate scheduled
 refresh; the API itself still polls providers every five minutes. Tap a card
 or the title to open `https://szymon.archea.dev`; the separate settings button
-opens configuration. A two-column card grid uses the same 80%/100% colors and
-local weekday/time format as Omarchy. Widget size is adjustable. No analytics or external SDKs.
+opens configuration. A two-column card grid matches Omarchy: a limit bar for
+quota, the remaining amount for a prepaid balance, the same 80%/100% colors, and
+the local weekday/time format. Widget size is adjustable. No analytics or external SDKs.
 
 GitHub Actions builds with JDK 17, Gradle 8.11.1, AGP 8.9.2 and SDK 35, runs
 lint and Android emulator instrumentation tests, and uploads a signed APK.
