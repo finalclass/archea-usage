@@ -14,20 +14,44 @@ export function resetLabel(date: string): string {
     hourCycle: "h23",
   }).format(new Date(date));
 }
+export function windowLabel(label: string): string {
+  return label === "weekly"
+    ? "Tydzień"
+    : label === "subscription"
+    ? "Abonament"
+    : label === "5h"
+    ? "5 h"
+    : label;
+}
+export function percentLabel(percent: number): string {
+  const rounded = Math.round(percent * 10) / 10;
+  return (Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)) +
+    "%";
+}
+function clock(date: string): string {
+  return new Date(date).toLocaleTimeString("pl-PL", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 export function render(meters: Meter[], _now = Date.now()) {
   const known = meters.flatMap((m) => m.windows.map((w) => w.usedPercent));
   const worst = known.length ? Math.max(...known) : null;
+  let latest = -Infinity;
+  for (const meter of meters) {
+    if (!meter.updatedAt) continue;
+    const time = new Date(meter.updatedAt).getTime();
+    if (time > latest) latest = time;
+  }
+  const stamp = Number.isFinite(latest) && latest > -Infinity
+    ? clock(new Date(latest).toISOString())
+    : null;
   const cards = meters.map((m) => {
     const peak = m.windows.length
       ? Math.max(...m.windows.map((w) => w.usedPercent))
       : null;
     const lines = m.windows.map((w) => {
-      const window = w.label === "weekly"
-        ? "Tydzień"
-        : w.label === "subscription"
-        ? "Abonament"
-        : w.label;
-      return window + ": " + w.usedPercent + "% zużyte" + "\n" +
+      return windowLabel(w.label) + ": " + w.usedPercent + "% zużyte" + "\n" +
         (w.resetsAt ? "Reset: " + resetLabel(w.resetsAt) : "Brak daty resetu");
     });
     if (m.balance) {
@@ -37,26 +61,43 @@ export function render(meters: Meter[], _now = Date.now()) {
     }
     if (!lines.length) lines.push("Brak danych");
     if (m.stale) lines.push("Dane nieaktualne");
-    const updated = m.updatedAt
-      ? new Date(m.updatedAt).toLocaleTimeString("pl-PL", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-      : "—";
+    const updated = m.updatedAt ? clock(m.updatedAt) : "—";
     return {
       id: m.id,
       label: m.label,
       value: lines.join("\n"),
       updated: "Stan: " + updated,
+      updatedTime: updated,
       level: level(peak),
+      stale: m.stale,
+      peakLabel: peak === null ? null : percentLabel(peak),
+      balance: m.balance
+        ? {
+          amount: m.balance.amount.toFixed(2),
+          currency: m.balance.currency,
+        }
+        : null,
+      windows: m.windows.map((w) => ({
+        label: windowLabel(w.label),
+        percent: w.usedPercent,
+        percentLabel: percentLabel(w.usedPercent),
+        level: level(w.usedPercent),
+        reset: w.resetsAt ? resetLabel(w.resetsAt) : null,
+      })),
     };
   });
+  const parts: string[] = [];
+  if (worst !== null) {
+    parts.push("Najwyższe zużycie: " + Math.round(worst) + "%");
+  }
+  if (stamp) parts.push((worst === null ? "Stan " : "stan ") + stamp);
   return {
     text: worst === null ? "AI —" : "AI " + Math.round(worst) + "%",
     tooltip: cards.map((c) => c.label + "\n" + c.value + "\n" + c.updated).join(
       "\n\n",
     ),
     class: level(worst),
+    summary: parts.join(" · "),
     cards,
   };
 }

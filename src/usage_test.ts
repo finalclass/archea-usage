@@ -145,6 +145,64 @@ Deno.test("provider cards have individual 80/100 thresholds and weekday reset", 
     })),
   );
   assert(r.cards.map((c) => c.level).join() === "normal,warning,critical");
+  assert(
+    r.cards.map((c) => c.windows[0].level).join() === "normal,warning,critical",
+  );
+  assert(
+    r.cards[1].peakLabel === "80%" && r.cards[1].windows[0].label === "Tydzień",
+  );
   assert(r.class === "critical" && r.cards[0].value.includes("Reset: "));
+  assert(r.summary.startsWith("Najwyższe zużycie: 100%"));
   assert(/^[^,]+, \d{2}:\d{2}$/.test(resetLabel("2026-10-07T07:51:00Z")));
+});
+Deno.test("panel cards keep balance separate from quota meters", () => {
+  const r = render([
+    {
+      ...empty("grok"),
+      stale: false,
+      updatedAt: "2026-10-04T05:04:00Z",
+      windows: [{
+        label: "subscription",
+        usedPercent: 10.24,
+        resetsAt: "2026-10-08T05:51:00Z",
+      }],
+    },
+    {
+      ...empty("codex"),
+      stale: true,
+      windows: [{
+        label: "5h",
+        usedPercent: 0,
+        resetsAt: null,
+      }],
+    },
+    {
+      ...empty("openrouter"),
+      stale: false,
+      updatedAt: "2026-10-04T05:04:00Z",
+      balance: { amount: 0.41, currency: "USD" },
+    },
+    {
+      ...empty("greenpt"),
+      stale: false,
+      balance: { amount: 0, currency: "EUR" },
+    },
+  ]);
+  assert(r.cards[0].windows[0].label === "Abonament");
+  assert(r.cards[0].windows[0].percentLabel === "10.2%");
+  assert(r.cards[0].peakLabel === "10.2%" && r.cards[0].balance === null);
+  assert(r.cards[0].windows[0].reset !== null);
+  assert(
+    r.cards[1].windows[0].label === "5 h" &&
+      r.cards[1].windows[0].reset === null,
+  );
+  assert(r.cards[1].stale === true && r.cards[1].peakLabel === "0%");
+  assert(r.cards[2].windows.length === 0 && r.cards[2].level === "normal");
+  assert(
+    r.cards[2].balance?.amount === "0.41" &&
+      r.cards[2].balance?.currency === "USD",
+  );
+  assert(r.cards[2].value.includes("0.41 USD pozostało"));
+  assert(r.cards[3].balance?.amount === "0.00");
+  assert(r.summary.startsWith("Najwyższe zużycie: 10%"));
 });
