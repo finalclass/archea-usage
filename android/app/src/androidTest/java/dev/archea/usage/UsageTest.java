@@ -34,7 +34,7 @@ public class UsageTest extends InstrumentationTestCase {
         try {
             AppWidgetManager manager=AppWidgetManager.getInstance(context);
             assertTrue("Launcher bind permission needed",manager.bindAppWidgetIdIfAllowed(widgetId,new ComponentName(context,UsageWidget.class)));
-            String snapshot="{\"meters\":["+meter("Grok",79)+","+meter("Codex",80)+","+meter("GreenPT",100)+","+meter("OpenRouter",0)+"]}";
+            String snapshot="{\"meters\":["+meter("Grok",79)+","+meter("Codex",80)+","+meter("GreenPT",100)+","+balance()+"]}";
             context.getSharedPreferences("usage",Context.MODE_PRIVATE).edit().putString("snapshot",snapshot).remove("error").commit();
             final AppWidgetHostView[] view=new AppWidgetHostView[1];
             getInstrumentation().runOnMainSync(()->{
@@ -50,14 +50,31 @@ public class UsageTest extends InstrumentationTestCase {
                 assertEquals(2,row.getChildCount());
                 TextView first=row.getChildAt(0).findViewById(R.id.provider_value);
                 TextView second=row.getChildAt(1).findViewById(R.id.provider_value);
-                assertTrue(first.getText().toString().contains("79%"));
-                assertTrue(second.getText().toString().contains("80%"));
-                assertTrue(second.getText().toString().matches("(?s).*Reset: [^,]+, [0-9]{2}:[0-9]{2}.*"));
+                assertEquals("79%",first.getText().toString());
+                assertEquals("80%",second.getText().toString());
+                assertEquals(android.graphics.Color.parseColor("#8ed3ff"),first.getCurrentTextColor());
                 assertEquals(android.graphics.Color.parseColor("#ffd166"),second.getCurrentTextColor());
+                ViewGroup windows=row.getChildAt(1).findViewById(R.id.windows);
+                TextView reset=windows.getChildAt(0).findViewById(R.id.window_reset);
+                assertEquals("Tydzień",((TextView)windows.getChildAt(0).findViewById(R.id.window_label)).getText().toString());
+                assertTrue(reset.getText().toString().matches("reset · [^,]+, [0-9]{2}:[0-9]{2}"));
+                assertEquals(android.graphics.Color.parseColor("#ffd166"),barPixel(row.getChildAt(1),0.05f));
+                assertEquals(UsageWidget.TRACK,barPixel(row.getChildAt(1),0.92f));
                 ViewGroup rowTwo=view[0].findViewById(R.id.row_two);
                 TextView critical=rowTwo.getChildAt(0).findViewById(R.id.provider_value);
-                assertTrue(critical.getText().toString().contains("100%"));
+                assertEquals("100%",critical.getText().toString());
                 assertEquals(android.graphics.Color.parseColor("#ff7078"),critical.getCurrentTextColor());
+                assertEquals(android.graphics.Color.parseColor("#ff7078"),barPixel(rowTwo.getChildAt(0),0.92f));
+                TextView amount=rowTwo.getChildAt(1).findViewById(R.id.balance_amount);
+                TextView currency=rowTwo.getChildAt(1).findViewById(R.id.balance_currency);
+                assertEquals(android.view.View.GONE,rowTwo.getChildAt(1).findViewById(R.id.provider_value).getVisibility());
+                assertEquals(android.view.View.GONE,rowTwo.getChildAt(1).findViewById(R.id.windows).getVisibility());
+                assertEquals(android.view.View.VISIBLE,rowTwo.getChildAt(1).findViewById(R.id.balance_block).getVisibility());
+                assertEquals("0.41",amount.getText().toString());
+                assertEquals("USD",currency.getText().toString());
+                TextView readings=view[0].findViewById(R.id.readings);
+                assertTrue(readings.getText().toString().startsWith("Najwyższe zużycie: 100%"));
+                assertEquals(android.graphics.Color.parseColor("#ff7078"),readings.getCurrentTextColor());
             });
             assertEquals(Intent.ACTION_VIEW,UsageWidget.websiteIntent().getAction());
             assertEquals("https://szymon.archea.dev",UsageWidget.websiteIntent().getDataString());
@@ -78,10 +95,40 @@ public class UsageTest extends InstrumentationTestCase {
     static String meter(String name,int percent) {
         return "{\"label\":\""+name+"\",\"windows\":[{\"label\":\"weekly\",\"usedPercent\":"+percent+",\"resetsAt\":\"2026-10-07T07:51:00Z\"}],\"balance\":null,\"updatedAt\":\"2026-10-02T00:00:00Z\",\"stale\":false}";
     }
+    static String balance() {
+        return "{\"label\":\"OpenRouter\",\"windows\":[],\"balance\":{\"amount\":0.41,\"currency\":\"USD\"},\"updatedAt\":\"2026-10-02T00:00:00Z\",\"stale\":false}";
+    }
+    static int barPixel(android.view.View card,float fraction) {
+        android.view.ViewGroup windows=card.findViewById(R.id.windows);
+        android.widget.ImageView meter=windows.getChildAt(0).findViewById(R.id.meter);
+        android.graphics.Bitmap bitmap=((android.graphics.drawable.BitmapDrawable)meter.getDrawable()).getBitmap();
+        int x=Math.max(0,Math.min(bitmap.getWidth()-1,Math.round((bitmap.getWidth()-1)*fraction)));
+        return bitmap.getPixel(x,bitmap.getHeight()/2);
+    }
     public void testThresholdsAndResetFormat() throws Exception {
         for(int p:new int[]{0,79,80,99,100,101})assertEquals(p>=100?2:p>=80?1:0,Api.level(new JSONObject(meter("Codex",p))));
+        assertEquals("10.2%",Api.percentLabel(10.24));
+        assertEquals("80%",Api.percentLabel(80));
+        assertEquals("Abonament",Api.windowLabel("subscription"));
+        assertEquals("5 h",Api.windowLabel("5h"));
         java.util.TimeZone previous=java.util.TimeZone.getDefault();
-        try { java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"));assertEquals("środa, 07:51",Api.resetLabel(java.time.Instant.parse("2026-10-07T07:51:00Z"))); }
+        try {
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"));
+            assertEquals("środa, 07:51",Api.resetLabel(java.time.Instant.parse("2026-10-07T07:51:00Z")));
+            org.json.JSONArray meters=new org.json.JSONObject("{\"meters\":[{\"label\":\"Grok\",\"windows\":[{\"label\":\"subscription\",\"usedPercent\":10.24,\"resetsAt\":null}],\"balance\":null,\"updatedAt\":\"2026-10-04T05:04:00Z\",\"stale\":false}]}").getJSONArray("meters");
+            assertEquals("Najwyższe zużycie: 10% · stan 05:04",Api.summary(meters));
+            assertEquals(0,Api.worstLevel(new org.json.JSONArray("["+balance()+"]")));
+            android.graphics.Bitmap low=UsageWidget.meterBitmap(100,8,UsageWidget.ACCENT,2);
+            android.graphics.Bitmap high=UsageWidget.meterBitmap(100,8,UsageWidget.ACCENT,12);
+            assertEquals(UsageWidget.ACCENT,low.getPixel(2,4));
+            assertEquals(UsageWidget.TRACK,low.getPixel(30,4));
+            assertEquals(UsageWidget.ACCENT,high.getPixel(8,4));
+            assertEquals(UsageWidget.TRACK,high.getPixel(30,4));
+            assertEquals(UsageWidget.TRACK,UsageWidget.meterBitmap(100,8,UsageWidget.ACCENT,0).getPixel(2,4));
+            assertEquals(UsageWidget.WARNING,UsageWidget.meterBitmap(100,8,UsageWidget.WARNING,80).getPixel(40,4));
+            assertEquals(UsageWidget.TRACK,UsageWidget.meterBitmap(100,8,UsageWidget.WARNING,80).getPixel(92,4));
+            assertEquals(UsageWidget.CRITICAL,UsageWidget.meterBitmap(100,8,UsageWidget.CRITICAL,100).getPixel(96,4));
+        }
         finally { java.util.TimeZone.setDefault(previous); }
     }
 }

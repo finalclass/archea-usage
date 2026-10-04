@@ -1,7 +1,20 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
- android:id="@+id/card" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
- android:layout_margin="4dp" android:orientation="vertical" android:padding="10dp" android:background="@drawable/card_normal">
- <TextView android:id="@+id/provider_name" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#8ed3ff" android:textSize="15sp" android:textStyle="bold"/>
- <TextView android:id="@+id/provider_value" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="6dp" android:textColor="#eeeeee" android:textSize="13sp"/>
- <TextView android:id="@+id/provider_updated" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="6dp" android:textColor="#a9b6c3" android:textSize="10sp"/>
+    android:id="@+id/card" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
+    android:layout_margin="4dp" android:orientation="vertical" android:paddingLeft="14dp" android:paddingRight="14dp" android:paddingTop="12dp" android:paddingBottom="10dp"
+    android:background="@drawable/card_normal">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/provider_name" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:textColor="#f3f6f8" android:textSize="16sp" android:textStyle="bold" android:maxLines="1" android:ellipsize="end"/>
+        <TextView android:id="@+id/provider_value" android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingLeft="8dp" android:textColor="#8ed3ff" android:textSize="22sp" android:textStyle="bold"/>
+    </LinearLayout>
+    <LinearLayout android:id="@+id/windows" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"/>
+    <LinearLayout android:id="@+id/balance_block" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="8dp" android:visibility="gone">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="bottom">
+            <TextView android:id="@+id/balance_amount" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#f3f6f8" android:textSize="28sp" android:textStyle="bold"/>
+            <TextView android:id="@+id/balance_currency" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="6dp" android:layout_marginBottom="3dp" android:textColor="#8fa1b3" android:textSize="13sp" android:textStyle="bold"/>
+        </LinearLayout>
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="pozostało" android:textColor="#8fa1b3" android:textSize="12sp"/>
+    </LinearLayout>
+    <TextView android:id="@+id/provider_empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Brak danych" android:textColor="#8fa1b3" android:textSize="13sp" android:visibility="gone"/>
+    <TextView android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"/>
+    <TextView android:id="@+id/provider_updated" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="end" android:textColor="#6e8294" android:textSize="11sp"/>
 </LinearLayout>

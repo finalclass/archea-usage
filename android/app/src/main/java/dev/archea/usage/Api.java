@@ -35,23 +35,56 @@ final class Api {
     static String resetLabel(Instant date) {
         return DateTimeFormatter.ofPattern("EEEE, HH:mm",java.util.Locale.forLanguageTag("pl-PL")).withZone(ZoneId.systemDefault()).format(date);
     }
+    static int percentLevel(double percent) { return percent>=100 ? 2 : percent>=80 ? 1 : 0; }
     static int level(JSONObject meter) throws Exception {
         JSONArray windows=meter.getJSONArray("windows"); double peak=0;
         for(int i=0;i<windows.length();i++) peak=Math.max(peak,windows.getJSONObject(i).getDouble("usedPercent"));
-        return peak>=100 ? 2 : peak>=80 ? 1 : 0;
+        return percentLevel(peak);
     }
-    static String cardText(JSONObject m) throws Exception {
-        StringBuilder result=new StringBuilder();JSONArray windows=m.getJSONArray("windows");
-        for(int i=0;i<windows.length();i++) {
-            JSONObject w=windows.getJSONObject(i);if(i>0)result.append("\n");
-            String label=w.getString("label");if(label.equals("weekly"))label="Tydzień";if(label.equals("subscription"))label="Abonament";
-            result.append(label).append(": ").append(Math.round(w.getDouble("usedPercent"))).append("% zużyte");
-            result.append("\n").append(w.isNull("resetsAt") ? "Brak daty resetu" : "Reset: "+resetLabel(Instant.parse(w.getString("resetsAt"))));
+    static int worstLevel(JSONArray meters) throws Exception {
+        double peak=-1;
+        for(int i=0;i<meters.length();i++) {
+            JSONArray windows=meters.getJSONObject(i).getJSONArray("windows");
+            for(int j=0;j<windows.length();j++) peak=Math.max(peak,windows.getJSONObject(j).getDouble("usedPercent"));
         }
-        if(!m.isNull("balance")) { JSONObject b=m.getJSONObject("balance");result.append(String.format(java.util.Locale.ROOT,"%.2f %s pozostało",b.getDouble("amount"),b.getString("currency"))); }
-        if(result.length()==0)result.append("Brak danych");
-        if(m.optBoolean("stale"))result.append("\nDane nieaktualne");
-        return result.toString();
+        return peak<0 ? 0 : percentLevel(peak);
+    }
+    static String windowLabel(String label) {
+        if("weekly".equals(label)) return "Tydzień";
+        if("subscription".equals(label)) return "Abonament";
+        if("5h".equals(label)) return "5 h";
+        return label;
+    }
+    static String percentLabel(double percent) {
+        double rounded=Math.round(percent*10.0)/10.0;
+        if(Math.abs(rounded-Math.rint(rounded))<0.001) return ((long)Math.rint(rounded))+"%";
+        return String.format(java.util.Locale.ROOT,"%.1f%%",rounded);
+    }
+    static String clock(Instant date) {
+        return DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault()).format(date);
+    }
+    static String summary(JSONArray meters) throws Exception {
+        Double worst=null; Instant latest=null;
+        for(int i=0;i<meters.length();i++) {
+            JSONObject meter=meters.getJSONObject(i);
+            JSONArray windows=meter.getJSONArray("windows");
+            for(int j=0;j<windows.length();j++) {
+                double percent=windows.getJSONObject(j).getDouble("usedPercent");
+                if(worst==null || percent>worst) worst=percent;
+            }
+            if(!meter.isNull("updatedAt")) {
+                Instant time=Instant.parse(meter.getString("updatedAt"));
+                if(latest==null || time.isAfter(latest)) latest=time;
+            }
+        }
+        StringBuilder parts=new StringBuilder();
+        if(worst!=null) parts.append("Najwyższe zużycie: ").append(Math.round(worst)).append("%");
+        if(latest!=null) {
+            if(parts.length()>0) parts.append(" · stan ");
+            else parts.append("Stan ");
+            parts.append(clock(latest));
+        }
+        return parts.toString();
     }
     static String render(JSONObject data) throws Exception {
         StringBuilder result = new StringBuilder(); JSONArray meters = data.getJSONArray("meters");
