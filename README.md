@@ -11,10 +11,22 @@ a minimal `green-l-raw` completion (`.` and `max_tokens: 1`), then reads
 therefore incurs a small inference charge. Clients share the cached result.
 A missing/invalid header is an error, never a zero balance. Provider endpoints for Grok/Codex are internal and can change.
 Credentials are read from the owner's existing CLI login files and are never
-returned by the API. The service does not refresh or rewrite those login files;
-renew expired logins using the provider CLI. Grok's reported billing period end
-is returned without inventing a reset date. OpenRouter balance is not a weekly
-subscription quota.
+returned by the API. Grok and Codex OAuth access tokens are renewed automatically
+when they are within ten minutes of expiry, and a 401 triggers one recovery and
+one retry. Initial login and revoked refresh tokens still require the provider
+CLI (`grok login` or `codex login`); the API reports `login_required` and preserves
+the last successful reading. Transient renewal failures are retried at the next
+scheduled poll; a still-valid access token remains usable in the meantime.
+Grok's reported billing period end is returned without inventing a reset date.
+OpenRouter balance is not a weekly subscription quota.
+
+Renewal follows the [Codex OAuth implementation](https://github.com/openai/codex/blob/main/codex-rs/login/src/auth/manager.rs)
+and [Grok OAuth implementation](https://github.com/xai-org/grok-build/blob/main/crates/codegen/xai-grok-login/src/oidc/protocol.rs).
+Rotated tokens are saved atomically to the existing `auth.json` with mode 600,
+preserving account metadata and other Grok login entries. Renewal is serialized
+using `auth.json.lock` (shared with Grok CLI), and credentials are reloaded before
+and after exchange to pick up CLI changes. Only the official OpenAI and xAI
+issuers are supported; credentials are never sent to a configured alternate issuer.
 
 ## API
 
@@ -32,7 +44,7 @@ The server binds only to loopback. Expose it through an HTTPS reverse proxy. Do
 not enable access logging with Authorization headers. The public source
 repository contains no account configuration or credentials.
 
-Run `deno task check` and `deno task test`. Set `USAGE_CONFIG` to a private JSON
+Use Deno 2.9 or newer. Run `deno task check` and `deno task test`. Set `USAGE_CONFIG` to a private JSON
 file with `credentials: {username, passwordHash}` (SHA-256 of a strong generated
 password), `providerHome`, `downloads`, `port` (default 7350), and
 `intervalSeconds` (default 300). Run `deno task serve`.
@@ -84,7 +96,15 @@ upgrades.
 
 ## Deployment and rollback
 
-See `deployment/` for the unit and proxy template. Stop/disable only
+See `deployment/` for the unit and proxy template. The unit uses an example
+`usage` account and `/home/usage`; replace these with the service owner's account,
+home and checkout paths. OAuth renewal requires read/write access to the owner's
+`.grok` and `.codex` directories (for locks and atomic token replacement), plus
+network access to `auth.x.ai:443` and `auth.openai.com:443`. Keep the other home
+paths read-only. `credentials_write_failed` indicates missing write permissions;
+`auth_refresh_failed` indicates a temporary renewal or lock failure.
+
+Stop/disable only
 `archea-usage.service`, remove only its Caddy site, validate/reload Caddy, and
 remove only the `usageproxy` Incus proxy device to roll back. Preserve the
 private credentials/signing key and avoid changing Operators or T3.
