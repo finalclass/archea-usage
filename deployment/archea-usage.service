@@ -4,18 +4,19 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-User=sel
-Group=sel
-Environment=HOME=/home/sel
-Environment=USAGE_CONFIG=/home/sel/.config/archea-usage/server.json
-WorkingDirectory=/home/sel/usage-meter
-ExecStart=/usr/local/bin/deno run --no-config --allow-env=USAGE_CONFIG --allow-read=/home/sel/usage-meter,/home/sel/.config/archea-usage/server.json,/home/sel/.grok/auth.json,/home/sel/.codex/auth.json,/home/sel/.local/share/opencode/auth.json --allow-net=127.0.0.1:7350,cli-chat-proxy.grok.com:443,chatgpt.com:443,openrouter.ai:443,api.greenpt.ai:443 /home/sel/usage-meter/serve.ts
+User=usage
+Group=usage
+Environment=HOME=/home/usage
+Environment=USAGE_CONFIG=/home/usage/.config/archea-usage/server.json
+WorkingDirectory=/home/usage/usage-meter
+ExecStart=/usr/local/bin/deno run --no-config --allow-env=USAGE_CONFIG --allow-read=/home/usage/usage-meter,/home/usage/.config/archea-usage/server.json,/home/usage/.grok,/home/usage/.codex,/home/usage/.local/share/opencode/auth.json --allow-write=/home/usage/.grok,/home/usage/.codex --allow-net=127.0.0.1:7350,cli-chat-proxy.grok.com:443,chatgpt.com:443,openrouter.ai:443,api.greenpt.ai:443,auth.openai.com:443,auth.x.ai:443 /home/usage/usage-meter/serve.ts
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
+ReadWritePaths=/home/usage/.grok /home/usage/.codex
 RestrictSUIDSGID=true
 UMask=0077
 MemoryMax=256M

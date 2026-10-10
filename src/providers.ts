@@ -1,4 +1,5 @@
 // Adapted from fc/operators src/usage.ts, revision dcc7c0e.
+import { authenticatedGet } from "./auth.ts";
 export type Window = {
   label: string;
   usedPercent: number;
@@ -96,29 +97,21 @@ export async function collect(id: string, home: string): Promise<Meter> {
   const read = async (path: string) =>
     JSON.parse(await Deno.readTextFile(`${home}/${path}`));
   if (id === "grok") {
-    const auth = await read(".grok/auth.json");
-    const entry = Object.values(auth).find((x: any) =>
-      typeof x?.key === "string"
-    ) as any;
-    if (!entry?.key) throw new Error("login_required");
     m.windows = parseGrok(
-      await get("https://cli-chat-proxy.grok.com/v1/billing?format=credits", {
-        Authorization: `Bearer ${entry.key}`,
-      }),
+      await authenticatedGet(
+        id,
+        home,
+        "https://cli-chat-proxy.grok.com/v1/billing?format=credits",
+      ),
     );
     if (!m.windows.length) throw new Error("invalid_response");
   } else if (id === "codex") {
-    const auth = await read(".codex/auth.json");
-    if (!auth.tokens?.access_token) throw new Error("login_required");
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${auth.tokens.access_token}`,
-      Accept: "application/json",
-    };
-    if (auth.tokens.account_id) {
-      headers["ChatGPT-Account-Id"] = auth.tokens.account_id;
-    }
     m.windows = parseCodex(
-      await get("https://chatgpt.com/backend-api/wham/usage", headers),
+      await authenticatedGet(
+        id,
+        home,
+        "https://chatgpt.com/backend-api/wham/usage",
+      ),
     );
     if (!m.windows.length) throw new Error("invalid_response");
   } else if (id === "openrouter") {
@@ -168,7 +161,10 @@ export async function collect(id: string, home: string): Promise<Meter> {
 }
 export function safeError(e: unknown): string {
   const message = e instanceof Error ? e.message : "";
-  if (/^(provider_http_\d{3}|login_required|invalid_response)$/.test(message)) {
+  if (
+    /^(provider_http_\d{3}|login_required|invalid_response|auth_refresh_failed|credentials_write_failed)$/
+      .test(message)
+  ) {
     return message;
   }
   if (e instanceof Deno.errors.NotFound) return "credentials_missing";
