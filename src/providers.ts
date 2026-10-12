@@ -37,7 +37,7 @@ export const labels: Record<string, string> = {
 export function empty(id: string, error: string | null = null): Meter {
   return {
     id,
-    label: labels[id],
+    label: id === "greenpt_opencode" ? "GreenPT · moje" : labels[id] ?? id,
     windows: [],
     balance: null,
     spend: null,
@@ -148,6 +148,22 @@ export async function resolveGreenptKey(
   }
   return key.trim();
 }
+// Keep both credential sources instead of letting an explicit key hide OpenCode.
+// Registration contains public meter IDs only; keys are reloaded for each poll.
+export async function meterIds(
+  home: string,
+  configured?: string | null,
+): Promise<string[]> {
+  const defaults = Object.keys(labels);
+  const explicit = configured?.trim();
+  if (!explicit) return defaults;
+  try {
+    if (await resolveGreenptKey(home) === explicit) return defaults;
+  } catch {
+    // A broken original login must be visible independently of the second account.
+  }
+  return ["grok", "codex", "greenpt_opencode", "greenpt", "openrouter"];
+}
 const greenptAgents = "https://api.greenpt.ai/v1/agents";
 const greenptUsage = "https://api.greenpt.ai/v1/agents/usage";
 type Fetcher = (input: string, init?: RequestInit) => Promise<Response>;
@@ -246,9 +262,15 @@ export async function collect(
       ),
       currency: "USD",
     };
-  } else if (id === "greenpt") {
-    const key = await resolveGreenptKey(home, options.greenptKey);
+  } else if (id === "greenpt" || id === "greenpt_opencode") {
+    const key = await resolveGreenptKey(
+      home,
+      id === "greenpt" ? options.greenptKey : undefined,
+    );
     const reading = await readGreenpt(key);
+    if (id === "greenpt" && options.greenptKey?.trim()) {
+      m.label = "GreenPT · dodatkowe";
+    }
     m.balance = reading.balance;
     m.spend = reading.spend;
   } else return empty(id, "unknown_provider");

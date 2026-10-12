@@ -56,7 +56,7 @@ public class UsageWidget extends AppWidgetProvider {
         int barHeight=Math.max(8,Math.round(8*density));
         return new int[]{barWidth,barHeight};
     }
-    static RemoteViews card(Context c,JSONObject meter,PendingIntent website,int barWidth,int barHeight) throws Exception {
+    static RemoteViews card(Context c,JSONObject meter,int barWidth,int barHeight) throws Exception {
         RemoteViews card=new RemoteViews(c.getPackageName(),R.layout.widget_card);
         int level=Api.level(meter);
         card.setTextViewText(R.id.provider_name,meter.getString("label"));
@@ -128,7 +128,7 @@ public class UsageWidget extends AppWidgetProvider {
         boolean failed=!meter.isNull("error");
         card.setTextViewText(R.id.provider_updated,Api.statusLine(meter));
         card.setTextColor(R.id.provider_updated,stale||failed?WARNING:FAINT);
-        card.setOnClickPendingIntent(R.id.card,website);
+        card.setOnClickFillInIntent(R.id.card,new Intent());
         return card;
     }
     static void draw(Context c) {
@@ -138,7 +138,11 @@ public class UsageWidget extends AppWidgetProvider {
         PendingIntent website=PendingIntent.getActivity(c,3,websiteIntent(),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         for(int id:manager.getAppWidgetIds(new ComponentName(c,UsageWidget.class))) {
             RemoteViews views=new RemoteViews(c.getPackageName(),R.layout.widget);
-            views.removeAllViews(R.id.row_one);views.removeAllViews(R.id.row_two);
+            Intent adapter=new Intent(c,WidgetCardsService.class).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,id);
+            adapter.setData(Uri.parse("archea-usage://widget/"+id));
+            views.setRemoteAdapter(R.id.cards,adapter);
+            Intent open=new Intent(c,UsageWidget.class).setAction("dev.archea.usage.OPEN");
+            views.setPendingIntentTemplate(R.id.cards,PendingIntent.getBroadcast(c,4,open,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_MUTABLE));
             String status=snapshot.isEmpty()?"Otwórz ustawienia i skonfiguruj API":error;
             int statusColor=status.isEmpty()?MUTED:CRITICAL;
             try {
@@ -149,16 +153,8 @@ public class UsageWidget extends AppWidgetProvider {
                         int worst=Api.worstLevel(meters);
                         statusColor=worst==0 ? MUTED : levelColor(worst);
                     }
-                    int shown=Math.min(4,meters.length());
-                    int[] topBar=meterSize(c,manager,id,Math.min(2,shown));
-                    int[] bottomBar=meterSize(c,manager,id,Math.max(1,shown-2));
-                    for(int i=0;i<shown;i++) {
-                        int[] bar=i<2?topBar:bottomBar;
-                        views.addView(i<2?R.id.row_one:R.id.row_two,card(c,meters.getJSONObject(i),website,bar[0],bar[1]));
-                    }
                 }
             } catch(Exception e) {
-                views.removeAllViews(R.id.row_one);views.removeAllViews(R.id.row_two);
                 status="Nieprawidłowe dane. Odśwież widget.";statusColor=CRITICAL;
             }
             views.setTextViewText(R.id.readings,status);
@@ -173,10 +169,18 @@ public class UsageWidget extends AppWidgetProvider {
             views.setTextViewText(R.id.refresh_label,refreshing?"Odświeżanie…":"Odśwież");
             views.setContentDescription(R.id.refresh,refreshing?"Odświeżanie danych":"Odśwież dane");
             manager.updateAppWidget(id,views);
+            manager.notifyAppWidgetViewDataChanged(id,R.id.cards);
         }
     }
     @Override public void onUpdate(Context c,AppWidgetManager m,int[] ids) { draw(c);RefreshJob.schedule(c);RefreshJob.now(c); }
     @Override public void onAppWidgetOptionsChanged(Context c,AppWidgetManager m,int id,Bundle options) { draw(c); }
-    @Override public void onReceive(Context c,Intent i) { super.onReceive(c,i);if("dev.archea.usage.REFRESH".equals(i.getAction()))RefreshJob.now(c); }
+    @Override public void onReceive(Context c,Intent i) {
+        super.onReceive(c,i);
+        if("dev.archea.usage.REFRESH".equals(i.getAction()))RefreshJob.now(c);
+        if("dev.archea.usage.OPEN".equals(i.getAction())) {
+            try { c.startActivity(websiteIntent().addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
+            catch(android.content.ActivityNotFoundException ignored) { }
+        }
+    }
     @Override public void onDisabled(Context c) { RefreshJob.cancel(c); }
 }

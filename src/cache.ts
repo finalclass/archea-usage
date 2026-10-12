@@ -1,12 +1,21 @@
 import { empty, labels, type Meter, safeError } from "./providers.ts";
 export class Cache {
-  meters: Meter[] = Object.keys(labels).map((id) => empty(id));
+  meters: Meter[];
   private pending: Promise<void> | null = null;
   lastAttempt: string | null = null;
   constructor(
     private fetcher: (id: string) => Promise<Meter>,
     readonly intervalSeconds = 300,
-  ) {}
+    ids: string[] = Object.keys(labels),
+  ) {
+    this.meters = ids.map((id) => {
+      const meter = empty(id);
+      if (id === "greenpt" && ids.includes("greenpt_opencode")) {
+        meter.label = "GreenPT · dodatkowe";
+      }
+      return meter;
+    });
+  }
   refresh(): Promise<void> {
     if (this.pending) return this.pending;
     this.pending = this.run().finally(() => {

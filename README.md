@@ -71,8 +71,12 @@ To measure a chosen GreenPT account, add `greenpt.key` to that private file
 (mode 600). The key stays there: it is not written to the repository, the API,
 logs, or the Omarchy and Android packages. If `greenpt.key` is absent or blank,
 the service still reads `greenpt.key` from
-`$providerHome/.local/share/opencode/auth.json`. An explicit key wins when both
-exist. A missing file with no explicit key is `credentials_missing`; a file
+`$providerHome/.local/share/opencode/auth.json`. When the explicit key differs
+from the OpenCode key, both accounts are collected independently: `GreenPT · moje`
+for OpenCode and `GreenPT · dodatkowe` for the configured key. Each keeps its own
+balance, spend, timestamp and error state. Identical keys produce one card.
+A missing original login remains visible as an error on its own card when an
+additional key is configured. A missing file with no explicit key is `credentials_missing`; a file
 without a GreenPT key is `login_required`.
 
 Example, with the secret replaced locally:
@@ -122,7 +126,10 @@ Manual requests also run offline to report a connection error instead of waiting
 indefinitely; repeated taps during a refresh do not enqueue more requests.
 The API itself still polls providers every five minutes. Tap a card
 or the title to open `https://szymon.archea.dev`; the separate settings button
-opens configuration. The widget background does not open the website. A two-column card grid matches Omarchy: a limit bar for
+opens configuration. The widget background does not open the website. A scrollable two-column card grid displays every account, including both GreenPT
+accounts. Rows grow with their content instead of clipping it to a fixed height.
+Names and reset dates wrap; balance amounts shrink to fit the card width and
+the currency has its own line. The cards match Omarchy: a limit bar for
 quota, the remaining amount for a prepaid balance, GreenPT spend and the same
 stale/error labels, the same 80%/100% colors, and
 the local weekday/time format. A failed client refresh keeps the last snapshot,

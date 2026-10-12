@@ -1,5 +1,5 @@
 import { Cache } from "./src/cache.ts";
-import { collect } from "./src/providers.ts";
+import { collect, meterIds } from "./src/providers.ts";
 import { type Credentials, handler } from "./src/http.ts";
 const configPath = Deno.env.get("USAGE_CONFIG");
 if (!configPath) throw new Error("USAGE_CONFIG required");
@@ -25,6 +25,7 @@ if (config.greenpt?.key != null && typeof config.greenpt.key !== "string") {
 const cache = new Cache(
   (id) => collect(id, config.providerHome, { greenptKey: config.greenpt?.key }),
   interval,
+  await meterIds(config.providerHome, config.greenpt?.key),
 );
 await cache.refresh();
 const timer = setInterval(() => {

@@ -1,5 +1,7 @@
 import {
+  collect,
   empty,
+  meterIds,
   parseBalance,
   parseCodex,
   parseGreenBalance,
@@ -318,6 +320,80 @@ Deno.test("GreenPT failure keeps the last balance and a distinct error", async (
     assert(
       meter?.error === (error === "offline" ? "provider_unavailable" : error),
     );
+  }
+});
+Deno.test("both GreenPT accounts are collected, cached and rendered independently", async () => {
+  const home = await Deno.makeTempDir();
+  const originalFetch = globalThis.fetch;
+  try {
+    await Deno.mkdir(`${home}/.local/share/opencode`, { recursive: true });
+    await Deno.writeTextFile(
+      `${home}/.local/share/opencode/auth.json`,
+      JSON.stringify({ greenpt: { key: "original-test-key" } }),
+    );
+    const ids = await meterIds(home, "additional-test-key");
+    assert(ids.length === 5 && ids.includes("greenpt_opencode"));
+    assert((await meterIds(home)).length === 4);
+    assert((await meterIds(home, " original-test-key ")).length === 4);
+    let failOriginal = false;
+    const keys: string[] = [];
+    globalThis.fetch = (_input, init) => {
+      const key = new Headers(init?.headers).get("Authorization");
+      keys.push(key!);
+      if (key === "Bearer original-test-key" && failOriginal) {
+        return Promise.resolve(new Response("", { status: 401 }));
+      }
+      if (String(_input).endsWith("/usage")) {
+        return Promise.resolve(new Response("", { status: 404 }));
+      }
+      return Promise.resolve(
+        new Response("{}", {
+          headers: {
+            "X-Credits-Remaining": key === "Bearer original-test-key"
+              ? "0.95"
+              : "10",
+          },
+        }),
+      );
+    };
+    const cache = new Cache(
+      (id) =>
+        id.startsWith("greenpt")
+          ? collect(id, home, { greenptKey: "additional-test-key" })
+          : Promise.resolve(empty(id)),
+      300,
+      ids,
+    );
+    await cache.refresh();
+    assert(
+      keys.filter((key) => key === "Bearer original-test-key").length === 2,
+    );
+    assert(
+      keys.filter((key) => key === "Bearer additional-test-key").length === 2,
+    );
+    const mine = cache.meters.find((m) => m.id === "greenpt_opencode")!;
+    const other = cache.meters.find((m) => m.id === "greenpt")!;
+    assert(mine.balance?.amount === 0.95 && other.balance?.amount === 10);
+    assert(
+      mine.label === "GreenPT · moje" && other.label === "GreenPT · dodatkowe",
+    );
+    const json = JSON.stringify(cache.snapshot());
+    assert(
+      !json.includes("test-key") && render(cache.meters).cards.length === 5,
+    );
+    failOriginal = true;
+    await cache.refresh();
+    const stale = cache.meters.find((m) => m.id === "greenpt_opencode")!;
+    assert(
+      stale.stale && stale.balance?.amount === 0.95 &&
+        stale.error === "provider_http_401",
+    );
+    assert(!cache.meters.find((m) => m.id === "greenpt")!.stale);
+    await Deno.remove(`${home}/.local/share/opencode/auth.json`);
+    assert((await meterIds(home, "additional-test-key")).length === 5);
+  } finally {
+    globalThis.fetch = originalFetch;
+    await Deno.remove(home, { recursive: true });
   }
 });
 Deno.test("GreenPT card shows the euro balance, spend and error state", () => {

@@ -8,8 +8,8 @@
     </LinearLayout>
     <TextView android:id="@+id/readings" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="6dp" android:textColor="#8fa1b3" android:textSize="12sp"/>
     <ImageView android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="10dp" android:layout_marginBottom="10dp" android:background="#243444" android:contentDescription="@null"/>
-    <LinearLayout android:id="@+id/row_one" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal"/>
-    <LinearLayout android:id="@+id/row_two" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal" android:layout_marginTop="8dp"/>
+    <ListView android:id="@+id/cards" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
+        android:divider="@null" android:dividerHeight="0dp" android:scrollbars="vertical"/>
     <LinearLayout android:id="@+id/refresh" android:layout_width="match_parent" android:layout_height="48dp"
         android:orientation="horizontal" android:gravity="center_vertical|end" android:paddingLeft="12dp" android:paddingRight="12dp"
         android:background="?android:attr/selectableItemBackground" android:contentDescription="Odśwież dane">
