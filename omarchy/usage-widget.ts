@@ -34,6 +34,30 @@ function clock(date: string): string {
     minute: "2-digit",
   });
 }
+export function money(amount: number): string {
+  if (amount === 0) return "0.00";
+  if (Math.abs(amount) >= 0.01) return amount.toFixed(2);
+  return amount.toFixed(8).replace(/0+$/, "").replace(/\.$/, "");
+}
+export function errorLabel(error: string | null): string | null {
+  if (error === "provider_http_401") return "odrzucony klucz";
+  if (error === "provider_http_402") return "brak środków";
+  if (error === "provider_http_429") return "limit zapytań";
+  if (error === "invalid_response") return "niepoprawny pomiar";
+  if (error === "provider_unavailable") return "awaria sieci";
+  if (error === "login_required") return "brak logowania";
+  if (error === "credentials_missing") return "brak klucza";
+  if (error && /^provider_http_\d{3}$/.test(error)) return "błąd dostawcy";
+  if (error) return "błąd pomiaru";
+  return null;
+}
+export function periodLabel(from: string, until: string): string {
+  const format = new Intl.DateTimeFormat("pl-PL", {
+    day: "2-digit",
+    month: "2-digit",
+  });
+  return format.format(new Date(from)) + "–" + format.format(new Date(until));
+}
 export function render(meters: Meter[], _now = Date.now()) {
   const known = meters.flatMap((m) => m.windows.map((w) => w.usedPercent));
   const worst = known.length ? Math.max(...known) : null;
@@ -56,27 +80,50 @@ export function render(meters: Meter[], _now = Date.now()) {
     });
     if (m.balance) {
       lines.push(
-        m.balance.amount.toFixed(2) + " " + m.balance.currency + " pozostało",
+        money(m.balance.amount) + " " + m.balance.currency + " pozostało",
       );
     }
+    const spend = m.spend
+      ? {
+        amount: money(m.spend.amount),
+        currency: m.spend.currency,
+        period: periodLabel(m.spend.from, m.spend.until),
+        line: money(m.spend.amount) + " " + m.spend.currency + " · " +
+          periodLabel(m.spend.from, m.spend.until),
+        models: m.spend.models.map((model) =>
+          model.model + " · " + money(model.amount) + " EUR"
+        ).join("\n"),
+      }
+      : null;
+    if (spend) lines.push(spend.line);
     if (!lines.length) lines.push("Brak danych");
     if (m.stale) lines.push("Dane nieaktualne");
+    const problem = errorLabel(m.error);
+    if (problem) lines.push(problem);
     const updated = m.updatedAt ? clock(m.updatedAt) : "—";
+    const status = [
+      m.stale ? "nieaktualne" : null,
+      problem,
+      "stan " + updated,
+    ].filter((part) => part).join(" · ");
     return {
       id: m.id,
       label: m.label,
       value: lines.join("\n"),
       updated: "Stan: " + updated,
       updatedTime: updated,
+      status,
+      errorLabel: problem,
       level: level(peak),
       stale: m.stale,
       peakLabel: peak === null ? null : percentLabel(peak),
       balance: m.balance
         ? {
-          amount: m.balance.amount.toFixed(2),
+          amount: money(m.balance.amount),
           currency: m.balance.currency,
         }
         : null,
+      spend,
       windows: m.windows.map((w) => ({
         label: windowLabel(w.label),
         percent: w.usedPercent,

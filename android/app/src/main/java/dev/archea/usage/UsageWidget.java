@@ -16,7 +16,6 @@ import android.net.Uri;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.time.Instant;
-import java.util.Locale;
 
 public class UsageWidget extends AppWidgetProvider {
     static final int ACCENT=Color.parseColor("#8ed3ff");
@@ -97,14 +96,38 @@ public class UsageWidget extends AppWidgetProvider {
         else {
             JSONObject balance=meter.getJSONObject("balance");
             card.setViewVisibility(R.id.balance_block,View.VISIBLE);
-            card.setTextViewText(R.id.balance_amount,String.format(Locale.ROOT,"%.2f",balance.getDouble("amount")));
+            card.setTextViewText(R.id.balance_amount,Api.money(balance.getDouble("amount")));
             card.setTextViewText(R.id.balance_currency,balance.getString("currency"));
+            if(meter.isNull("spend")) {
+                card.setViewVisibility(R.id.spend_line,View.GONE);
+                card.setViewVisibility(R.id.spend_models,View.GONE);
+            } else {
+                JSONObject spend=meter.getJSONObject("spend");
+                String line=Api.money(spend.getDouble("amount"))+" "+spend.getString("currency");
+                if(!spend.isNull("from") && !spend.isNull("until")) line+=" · "+Api.periodLabel(Instant.parse(spend.getString("from")),Instant.parse(spend.getString("until")));
+                card.setViewVisibility(R.id.spend_line,View.VISIBLE);
+                card.setTextViewText(R.id.spend_line,line);
+                JSONArray models=spend.optJSONArray("models");
+                if(models==null || models.length()==0) card.setViewVisibility(R.id.spend_models,View.GONE);
+                else {
+                    StringBuilder text=new StringBuilder();
+                    int shown=Math.min(4,models.length());
+                    for(int i=0;i<shown;i++) {
+                        JSONObject model=models.getJSONObject(i);
+                        if(i>0) text.append('\n');
+                        text.append(model.getString("model")).append(" · ").append(Api.money(model.getDouble("amount"))).append(" EUR");
+                    }
+                    if(models.length()>shown) text.append("\n+").append(models.length()-shown);
+                    card.setViewVisibility(R.id.spend_models,View.VISIBLE);
+                    card.setTextViewText(R.id.spend_models,text.toString());
+                }
+            }
         }
         card.setViewVisibility(R.id.provider_empty,windows.length()==0 && meter.isNull("balance") ? View.VISIBLE : View.GONE);
-        String updated=meter.isNull("updatedAt")?"—":Api.clock(Instant.parse(meter.getString("updatedAt")));
         boolean stale=meter.optBoolean("stale");
-        card.setTextViewText(R.id.provider_updated,(stale?"nieaktualne · ":"")+"stan "+updated);
-        card.setTextColor(R.id.provider_updated,stale?WARNING:FAINT);
+        boolean failed=!meter.isNull("error");
+        card.setTextViewText(R.id.provider_updated,Api.statusLine(meter));
+        card.setTextColor(R.id.provider_updated,stale||failed?WARNING:FAINT);
         card.setOnClickPendingIntent(R.id.card,website);
         return card;
     }

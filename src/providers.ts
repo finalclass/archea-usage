@@ -5,11 +5,25 @@ export type Window = {
   usedPercent: number;
   resetsAt: string | null;
 };
+export type GreenModel = {
+  model: string;
+  amount: number;
+  calls: number;
+};
+export type GreenSpend = {
+  amount: number;
+  currency: "EUR";
+  from: string;
+  until: string;
+  calls: number;
+  models: GreenModel[];
+};
 export type Meter = {
   id: string;
   label: string;
   windows: Window[];
   balance: { amount: number; currency: string } | null;
+  spend: GreenSpend | null;
   updatedAt: string | null;
   stale: boolean;
   error: string | null;
@@ -26,6 +40,7 @@ export function empty(id: string, error: string | null = null): Meter {
     label: labels[id],
     windows: [],
     balance: null,
+    spend: null,
     updatedAt: null,
     stale: true,
     error,
@@ -80,6 +95,108 @@ export function parseGreenBalance(header: string | null): number {
   }
   return Number(header);
 }
+export function parseGreenSpend(data: unknown): GreenSpend | null {
+  if (!data || typeof data !== "object") return null;
+  const row = data as Record<string, unknown>;
+  const amount = Number(row.totalCostEur);
+  const from = reset(row.from);
+  const until = reset(row.until);
+  const calls = row.totalCalls;
+  if (
+    !Number.isFinite(amount) || amount < 0 || !from || !until ||
+    !Number.isInteger(calls) || (calls as number) < 0
+  ) return null;
+  const models: GreenModel[] = [];
+  if (Array.isArray(row.byModel)) {
+    for (const item of row.byModel) {
+      if (!item || typeof item !== "object") continue;
+      const model = item as Record<string, unknown>;
+      const modelAmount = Number(model.costEur);
+      if (
+        typeof model.modelId !== "string" || model.modelId.trim() === "" ||
+        !Number.isFinite(modelAmount) || modelAmount < 0 ||
+        !Number.isInteger(model.calls) || (model.calls as number) < 0
+      ) continue;
+      models.push({
+        model: model.modelId,
+        amount: modelAmount,
+        calls: model.calls as number,
+      });
+    }
+  }
+  return {
+    amount,
+    currency: "EUR",
+    from,
+    until,
+    calls: calls as number,
+    models,
+  };
+}
+export async function resolveGreenptKey(
+  home: string,
+  configured?: string | null,
+): Promise<string> {
+  const explicit = typeof configured === "string" ? configured.trim() : "";
+  if (explicit) return explicit;
+  const auth = JSON.parse(
+    await Deno.readTextFile(`${home}/.local/share/opencode/auth.json`),
+  );
+  const key = auth?.greenpt?.key;
+  if (typeof key !== "string" || key.trim() === "") {
+    throw new Error("login_required");
+  }
+  return key.trim();
+}
+const greenptAgents = "https://api.greenpt.ai/v1/agents";
+const greenptUsage = "https://api.greenpt.ai/v1/agents/usage";
+type Fetcher = (input: string, init?: RequestInit) => Promise<Response>;
+function greenptRequest(key: string): RequestInit {
+  return {
+    headers: {
+      Authorization: `Bearer ${key}`,
+      Accept: "application/json",
+    },
+    signal: AbortSignal.timeout(15000),
+    redirect: "error",
+  };
+}
+export async function readGreenpt(
+  key: string,
+  fetchImpl: Fetcher = (input, init) => fetch(input, init),
+): Promise<
+  { balance: { amount: number; currency: "EUR" }; spend: GreenSpend | null }
+> {
+  const agentsPromise = fetchImpl(greenptAgents, greenptRequest(key));
+  const usagePromise = fetchImpl(greenptUsage, greenptRequest(key)).catch(() =>
+    null
+  );
+  let agents: Response;
+  try {
+    agents = await agentsPromise;
+  } catch (error) {
+    const usage = await usagePromise;
+    await usage?.body?.cancel().catch(() => {});
+    throw error;
+  }
+  const usage = await usagePromise;
+  try {
+    if (!agents.ok) throw new Error(`provider_http_${agents.status}`);
+    const amount = parseGreenBalance(agents.headers.get("X-Credits-Remaining"));
+    let spend: GreenSpend | null = null;
+    if (usage?.ok) {
+      try {
+        spend = parseGreenSpend(await usage.json());
+      } catch {
+        spend = null;
+      }
+    }
+    return { balance: { amount, currency: "EUR" }, spend };
+  } finally {
+    await agents.body?.cancel().catch(() => {});
+    await usage?.body?.cancel().catch(() => {});
+  }
+}
 async function get(url: string, headers: Record<string, string>): Promise<any> {
   const r = await fetch(url, {
     headers,
@@ -92,7 +209,11 @@ async function get(url: string, headers: Record<string, string>): Promise<any> {
   }
   return await r.json();
 }
-export async function collect(id: string, home: string): Promise<Meter> {
+export async function collect(
+  id: string,
+  home: string,
+  options: { greenptKey?: string | null } = {},
+): Promise<Meter> {
   const m = empty(id);
   const read = async (path: string) =>
     JSON.parse(await Deno.readTextFile(`${home}/${path}`));
@@ -126,31 +247,10 @@ export async function collect(id: string, home: string): Promise<Meter> {
       currency: "USD",
     };
   } else if (id === "greenpt") {
-    const auth = await read(".local/share/opencode/auth.json");
-    if (!auth.greenpt?.key) throw new Error("login_required");
-    // Support's recommended balance probe: one input character, one output token.
-    // Runs only during scheduled cache refresh, never on a client request.
-    const response = await fetch("https://api.greenpt.ai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${auth.greenpt.key}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "green-l-raw",
-        messages: [{ role: "user", content: "." }],
-        max_tokens: 1,
-        stream: false,
-      }),
-      signal: AbortSignal.timeout(15000),
-      redirect: "error",
-    });
-    await response.body?.cancel();
-    if (!response.ok) throw new Error(`provider_http_${response.status}`);
-    m.balance = {
-      amount: parseGreenBalance(response.headers.get("X-Credits-Remaining")),
-      currency: "EUR",
-    };
+    const key = await resolveGreenptKey(home, options.greenptKey);
+    const reading = await readGreenpt(key);
+    m.balance = reading.balance;
+    m.spend = reading.spend;
   } else return empty(id, "unknown_provider");
   return {
     ...m,

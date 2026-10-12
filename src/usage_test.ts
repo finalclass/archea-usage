@@ -3,11 +3,21 @@ import {
   parseBalance,
   parseCodex,
   parseGreenBalance,
+  parseGreenSpend,
   parseGrok,
+  readGreenpt,
+  resolveGreenptKey,
+  safeError,
 } from "./providers.ts";
 import { Cache } from "./cache.ts";
 import { handler, hash } from "./http.ts";
-import { level, render, resetLabel } from "../omarchy/usage-widget.ts";
+import {
+  errorLabel,
+  level,
+  money,
+  render,
+  resetLabel,
+} from "../omarchy/usage-widget.ts";
 function assert(value: unknown, message = "Assertion failed"): asserts value {
   if (!value) throw new Error(message);
 }
@@ -124,6 +134,232 @@ Deno.test("GreenPT balance requires a numeric response header and preserves zero
     }
     assert(rejected, "Invalid balance must not become zero");
   }
+});
+function greenResponse(
+  status: number,
+  headers: Record<string, string>,
+  body = "",
+): Response {
+  return new Response(body, { status, headers });
+}
+Deno.test("GreenPT balance comes only from X-Credits-Remaining and keeps spend", async () => {
+  const calls: string[] = [];
+  const reading = await readGreenpt("test-key", (url, init) => {
+    calls.push(url);
+    const headers = new Headers(init?.headers);
+    assert(headers.get("Authorization") === "Bearer test-key");
+    assert(init?.redirect === "error");
+    assert(!url.includes("test-key") && !url.includes("chat/completions"));
+    if (url.endsWith("/usage")) {
+      return Promise.resolve(greenResponse(
+        200,
+        {
+          "x-credit-balance": "1",
+        },
+        JSON.stringify({
+          from: "2026-09-12T12:00:00.000Z",
+          until: "2026-10-12T12:00:00.000Z",
+          totalCostEur: "0.000018150000000000001",
+          totalCalls: 2,
+          remainingCreditsEur: "1",
+          byModel: [{
+            modelId: "glm-5.3-flash",
+            costEur: "0.00001815",
+            calls: 2,
+          }],
+        }),
+      ));
+    }
+    return Promise.resolve(greenResponse(200, {
+      "X-Credits-Remaining": "9.99998185",
+      "x-credit-balance": "0",
+    }, "{}"));
+  });
+  assert(
+    reading.balance.amount === 9.99998185 && reading.balance.currency === "EUR",
+  );
+  assert(reading.spend?.amount === Number("0.000018150000000000001"));
+  assert(reading.spend?.calls === 2 && reading.spend?.models.length === 1);
+  assert(reading.spend?.models[0].model === "glm-5.3-flash");
+  assert(calls.length === 2);
+});
+Deno.test("GreenPT treats zero, a missing header and HTTP failures as different results", async () => {
+  const zero = await readGreenpt("test-key", (url) =>
+    Promise.resolve(
+      url.endsWith("/usage")
+        ? greenResponse(404, {})
+        : greenResponse(200, { "X-Credits-Remaining": "0" }),
+    ));
+  assert(zero.balance.amount === 0 && zero.spend === null);
+  const onlyDocumented = readGreenpt(
+    "test-key",
+    () =>
+      Promise.resolve(greenResponse(200, { "x-credit-balance": "5" }, "{}")),
+  );
+  let invalid = false;
+  try {
+    await onlyDocumented;
+  } catch (error) {
+    invalid = safeError(error) === "invalid_response";
+  }
+  assert(invalid);
+  for (const status of [401, 402, 429]) {
+    let seen = "";
+    try {
+      await readGreenpt(
+        "test-key",
+        (url) =>
+          Promise.resolve(
+            greenResponse(status, { "X-Credits-Remaining": "0" }),
+          ),
+      );
+    } catch (error) {
+      seen = safeError(error);
+    }
+    assert(seen === `provider_http_${status}`, seen);
+  }
+  let network = "";
+  try {
+    await readGreenpt(
+      "test-key",
+      () => Promise.reject(new TypeError("offline")),
+    );
+  } catch (error) {
+    network = safeError(error);
+  }
+  assert(network === "provider_unavailable");
+  const brokenUsage = await readGreenpt("test-key", (url) =>
+    Promise.resolve(
+      url.endsWith("/usage")
+        ? greenResponse(200, {}, "{")
+        : greenResponse(200, { "X-Credits-Remaining": "2.5" }),
+    ));
+  assert(brokenUsage.balance.amount === 2.5 && brokenUsage.spend === null);
+  assert(
+    parseGreenSpend({
+      totalCostEur: "0",
+      totalCalls: 0,
+      from: "2026-09-12T12:00:00Z",
+      until: "2026-10-12T12:00:00Z",
+    })?.amount === 0,
+  );
+  assert(parseGreenSpend({ totalCostEur: "nope", totalCalls: 1 }) === null);
+});
+Deno.test("GreenPT key prefers private configuration and still accepts OpenCode", async () => {
+  const home = await Deno.makeTempDir();
+  const authDir = `${home}/.local/share/opencode`;
+  await Deno.mkdir(authDir, { recursive: true });
+  await Deno.writeTextFile(
+    `${authDir}/auth.json`,
+    JSON.stringify({
+      greenpt: { key: " from-file " },
+      openrouter: { key: "keep" },
+    }),
+  );
+  assert(await resolveGreenptKey(home) === "from-file");
+  assert(await resolveGreenptKey(home, " explicit ") === "explicit");
+  assert(await resolveGreenptKey(home, "  ") === "from-file");
+  await Deno.writeTextFile(
+    `${authDir}/auth.json`,
+    JSON.stringify({ openrouter: { key: "keep" } }),
+  );
+  let missing = "";
+  try {
+    await resolveGreenptKey(home);
+  } catch (error) {
+    missing = safeError(error);
+  }
+  assert(missing === "login_required");
+  const bare = await Deno.makeTempDir();
+  let absent = "";
+  try {
+    await resolveGreenptKey(bare);
+  } catch (error) {
+    absent = safeError(error);
+  }
+  assert(absent === "credentials_missing");
+  assert(await resolveGreenptKey(bare, "configured") === "configured");
+  await Deno.remove(home, { recursive: true });
+  await Deno.remove(bare, { recursive: true });
+});
+Deno.test("GreenPT failure keeps the last balance and a distinct error", async () => {
+  let mode = "ok";
+  const cache = new Cache(async (id) => {
+    if (id !== "greenpt") {
+      return { ...empty(id), updatedAt: "2026-10-02T00:00:00Z", stale: false };
+    }
+    if (mode === "ok") {
+      return {
+        ...empty(id),
+        balance: { amount: 0, currency: "EUR" },
+        updatedAt: "2026-10-12T00:00:00Z",
+        stale: false,
+        error: null,
+      };
+    }
+    throw new Error(mode);
+  });
+  await cache.refresh();
+  for (
+    const error of [
+      "provider_http_401",
+      "provider_http_402",
+      "provider_http_429",
+      "invalid_response",
+      "offline",
+    ]
+  ) {
+    mode = error;
+    await cache.refresh();
+    const meter = cache.meters.find((item) => item.id === "greenpt");
+    assert(meter?.stale === true);
+    assert(meter?.balance?.amount === 0);
+    assert(meter?.updatedAt === "2026-10-12T00:00:00Z");
+    assert(
+      meter?.error === (error === "offline" ? "provider_unavailable" : error),
+    );
+  }
+});
+Deno.test("GreenPT card shows the euro balance, spend and error state", () => {
+  assert(money(0) === "0.00" && money(0.41) === "0.41");
+  assert(money(0.00001815) === "0.00001815");
+  assert(errorLabel("provider_http_401") === "odrzucony klucz");
+  assert(errorLabel("provider_http_402") === "brak środków");
+  assert(errorLabel("provider_http_429") === "limit zapytań");
+  assert(errorLabel("invalid_response") === "niepoprawny pomiar");
+  assert(errorLabel("provider_unavailable") === "awaria sieci");
+  const fresh = render([{
+    ...empty("greenpt"),
+    stale: false,
+    updatedAt: "2026-10-12T12:05:00Z",
+    balance: { amount: 9.99998185, currency: "EUR" },
+    spend: {
+      amount: 0.00001815,
+      currency: "EUR",
+      from: "2026-09-12T12:00:00.000Z",
+      until: "2026-10-12T12:00:00.000Z",
+      calls: 2,
+      models: [{ model: "glm-5.3-flash", amount: 0.00001815, calls: 2 }],
+    },
+  }]);
+  const card = fresh.cards[0];
+  assert(card.balance?.amount === "10.00" && card.balance?.currency === "EUR");
+  assert(card.spend?.line.includes("0.00001815 EUR"));
+  assert(
+    card.spend?.line.includes("12.09") && card.spend?.line.includes("12.10"),
+  );
+  assert(card.spend?.models === "glm-5.3-flash · 0.00001815 EUR");
+  assert(card.status.startsWith("stan ") && card.errorLabel === null);
+  assert(card.level === "normal" && fresh.summary.startsWith("Stan "));
+  const failed = render([{
+    ...empty("greenpt", "provider_http_402"),
+    updatedAt: "2026-10-12T12:05:00Z",
+    balance: { amount: 0, currency: "EUR" },
+  }]);
+  assert(failed.cards[0].balance?.amount === "0.00");
+  assert(
+    failed.cards[0].status.startsWith("nieaktualne · brak środków · stan "),
+  );
 });
 Deno.test("provider cards have individual 80/100 thresholds and weekday reset", () => {
   assert(

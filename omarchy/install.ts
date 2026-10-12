@@ -10,6 +10,7 @@ for (
     "omarchy/Panel.qml",
     "omarchy/manifest.json",
     "src/providers.ts",
+    "src/auth.ts",
   ]
 ) {
   await Deno.copyFile(new URL(name, base), `${dest}/${name}`);

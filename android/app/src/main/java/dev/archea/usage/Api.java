@@ -11,6 +11,7 @@ import org.json.JSONObject;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 
 final class Api {
     static JSONObject fetch(Context c) throws Exception {
@@ -63,6 +64,38 @@ final class Api {
     static String clock(Instant date) {
         return DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault()).format(date);
     }
+    static String money(double amount) {
+        if (amount == 0d) return "0.00";
+        if (Math.abs(amount) >= 0.01d) return String.format(Locale.ROOT, "%.2f", amount);
+        return String.format(Locale.ROOT, "%.8f", amount).replaceAll("0+$", "").replaceAll("\\.$", "");
+    }
+    static String errorLabel(String error) {
+        if (error == null || error.isEmpty()) return null;
+        if ("provider_http_401".equals(error)) return "odrzucony klucz";
+        if ("provider_http_402".equals(error)) return "brak środków";
+        if ("provider_http_429".equals(error)) return "limit zapytań";
+        if ("invalid_response".equals(error)) return "niepoprawny pomiar";
+        if ("provider_unavailable".equals(error)) return "awaria sieci";
+        if ("login_required".equals(error)) return "brak logowania";
+        if ("credentials_missing".equals(error)) return "brak klucza";
+        if (error.matches("provider_http_\\d{3}")) return "błąd dostawcy";
+        return "błąd pomiaru";
+    }
+    static String periodLabel(Instant from, Instant until) {
+        DateTimeFormatter format = DateTimeFormatter.ofPattern("dd.MM").withZone(ZoneId.systemDefault());
+        return format.format(from) + "–" + format.format(until);
+    }
+    static String statusLine(JSONObject meter) throws Exception {
+        StringBuilder parts = new StringBuilder();
+        if (meter.optBoolean("stale")) parts.append("nieaktualne · ");
+        if (!meter.isNull("error")) {
+            String label = errorLabel(meter.getString("error"));
+            if (label != null) parts.append(label).append(" · ");
+        }
+        String updated = meter.isNull("updatedAt") ? "—" : clock(Instant.parse(meter.getString("updatedAt")));
+        parts.append("stan ").append(updated);
+        return parts.toString();
+    }
     static String summary(JSONArray meters) throws Exception {
         Double worst=null; Instant latest=null;
         for(int i=0;i<meters.length();i++) {
@@ -100,9 +133,15 @@ final class Api {
                     result.append("\n  Reset: ").append(resetLabel(reset));
                 }
             }
-            if(!m.isNull("balance")){JSONObject b=m.getJSONObject("balance");result.append(String.format(java.util.Locale.ROOT,"%.2f %s",b.getDouble("amount"),b.getString("currency")));}
+            if(!m.isNull("balance")){JSONObject b=m.getJSONObject("balance");result.append(money(b.getDouble("amount"))).append(" ").append(b.getString("currency"));}
+            if(!m.isNull("spend")){
+                JSONObject spend=m.getJSONObject("spend");
+                result.append("\n  ").append(money(spend.getDouble("amount"))).append(" ").append(spend.getString("currency"));
+                if(!spend.isNull("from") && !spend.isNull("until")) result.append(" · ").append(periodLabel(Instant.parse(spend.getString("from")), Instant.parse(spend.getString("until"))));
+            }
             if(windows.length()==0 && m.isNull("balance"))result.append("brak danych");
             if(m.optBoolean("stale"))result.append(" · nieaktualne");
+            if(!m.isNull("error")){String label=errorLabel(m.getString("error")); if(label!=null) result.append(" · ").append(label);}
             if(!m.isNull("updatedAt"))result.append("\n  stan: ").append(DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.systemDefault()).format(Instant.parse(m.getString("updatedAt"))));
             result.append("\n\n");
         }

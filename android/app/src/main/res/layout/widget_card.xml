@@ -13,8 +13,10 @@
             <TextView android:id="@+id/balance_currency" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="6dp" android:layout_marginBottom="3dp" android:textColor="#8fa1b3" android:textSize="13sp" android:textStyle="bold"/>
         </LinearLayout>
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="pozostało" android:textColor="#8fa1b3" android:textSize="12sp"/>
+        <TextView android:id="@+id/spend_line" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:textColor="#8fa1b3" android:textSize="12sp" android:visibility="gone"/>
+        <TextView android:id="@+id/spend_models" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#6e8294" android:textSize="12sp" android:visibility="gone"/>
     </LinearLayout>
     <TextView android:id="@+id/provider_empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Brak danych" android:textColor="#8fa1b3" android:textSize="13sp" android:visibility="gone"/>
     <TextView android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"/>
-    <TextView android:id="@+id/provider_updated" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="end" android:textColor="#6e8294" android:textSize="11sp"/>
+    <TextView android:id="@+id/provider_updated" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="end" android:textColor="#6e8294" android:textSize="11sp" android:maxLines="3"/>
 </LinearLayout>
