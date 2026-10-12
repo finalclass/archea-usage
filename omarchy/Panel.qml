@@ -174,6 +174,22 @@ Item {
                     color: root.muted
                     font.pixelSize: 12
                 }
+                Text {
+                    visible: card.meter && card.meter.spend
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                    text: card.meter && card.meter.spend ? card.meter.spend.line : ""
+                    color: root.muted
+                    font.pixelSize: 12
+                }
+                Text {
+                    visible: card.meter && card.meter.spend && card.meter.spend.models
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                    text: card.meter && card.meter.spend ? card.meter.spend.models : ""
+                    color: root.faint
+                    font.pixelSize: 12
+                }
             }
 
             Text {
@@ -190,8 +206,8 @@ Item {
             anchors.bottom: parent.bottom
             anchors.rightMargin: 16
             anchors.bottomMargin: 12
-            text: ((card.meter && card.meter.stale) ? "nieaktualne · " : "") + "stan " + ((card.meter && card.meter.updatedTime) || "—")
-            color: (card.meter && card.meter.stale) ? root.accent("warning") : root.faint
+            text: (card.meter && card.meter.status) ? card.meter.status : (((card.meter && card.meter.stale) ? "nieaktualne · " : "") + "stan " + ((card.meter && card.meter.updatedTime) || "—"))
+            color: (card.meter && (card.meter.stale || card.meter.errorLabel)) ? root.accent("warning") : root.faint
             font.pixelSize: 11
         }
 

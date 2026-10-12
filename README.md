@@ -5,11 +5,29 @@ OpenRouter and GreenPT account credit balances. Includes an Omarchy Quickshell p
 a native Android home-screen widget. No CodexBar dependency.
 
 Provider collectors adapted from `fc/operators/src/usage.ts` at `dcc7c0e`.
-GreenPT uses the workaround recommended by support on 23 September 2026:
-a minimal `green-l-raw` completion (`.` and `max_tokens: 1`), then reads
-`X-Credits-Remaining` as the prepaid euro balance. Each scheduled refresh
-therefore incurs a small inference charge. Clients share the cached result.
-A missing/invalid header is an error, never a zero balance. Provider endpoints for Grok/Codex are internal and can change.
+GreenPT prepaid balance is the euro amount in `X-Credits-Remaining` on
+authenticated `GET https://api.greenpt.ai/v1/agents`. That call does not start
+a run and does not bill inference. Checked on 12 October 2026, the same
+response has no `x-credit-balance` header; `GET /v1/models` has neither header,
+and a `glm-5.3-flash` completion can succeed without `x-credit-balance`. Those
+names are not substitutes. A missing or non-numeric `X-Credits-Remaining` is
+`invalid_response`, including when only `x-credit-balance` is present. Numeric
+zero is a real balance. `401`, `402` and `429` stay `provider_http_401`,
+`provider_http_402` and `provider_http_429`. A network failure is
+`provider_unavailable`. Each of those keeps the previous successful reading and
+marks it stale.
+
+Account spend comes from `GET https://api.greenpt.ai/v1/agents/usage`. On
+12 October 2026 it returned the server's window (the previous 30 days), total
+EUR, call count, and per-model cost and token counts, and it described that
+total as whole-account API spend. The body field `remainingCreditsEur` is not
+used as the balance. There is no per-API-key breakdown in that payload.
+`GET /v1/usage` and `GET /v1/credits` return 404. The account portal page
+`https://account.greenpt.ai/api/usage` is HTML and describes per-key analytics,
+but it is not a machine-readable source, so per-key cost is not reported.
+A failed or unusable usage response omits `spend` and does not invalidate a
+balance read in the same refresh. Clients share this cached snapshot; refreshing
+a client does not call GreenPT again. Provider endpoints for Grok/Codex are internal and can change.
 Credentials are read from the owner's existing CLI login files and are never
 returned by the API. Grok and Codex OAuth access tokens are renewed automatically
 when they are within ten minutes of expiry, and a 401 triggers one recovery and
@@ -49,6 +67,22 @@ file with `credentials: {username, passwordHash}` (SHA-256 of a strong generated
 password), `providerHome`, `downloads`, `port` (default 7350), and
 `intervalSeconds` (default 300). Run `deno task serve`.
 
+To measure a chosen GreenPT account, add `greenpt.key` to that private file
+(mode 600). The key stays there: it is not written to the repository, the API,
+logs, or the Omarchy and Android packages. If `greenpt.key` is absent or blank,
+the service still reads `greenpt.key` from
+`$providerHome/.local/share/opencode/auth.json`. An explicit key wins when both
+exist. A missing file with no explicit key is `credentials_missing`; a file
+without a GreenPT key is `login_required`.
+
+Example, with the secret replaced locally:
+
+```json
+{
+  "greenpt": { "key": "PASTE_THE_ACCOUNT_KEY" }
+}
+```
+
 ## Omarchy
 
 Download and extract the authenticated `/downloads/omarchy.tar.gz`, then:
@@ -64,7 +98,11 @@ API every five minutes. Left or right click on the bar icon toggles the cards.
 The close button hides them. Resets use the local device timezone and Polish
 weekday/hour format, for example `środa, 07:51`. Each quota card shows a limit
 bar and turns yellow at 80% usage and red at 100%. A prepaid balance shows the
-remaining amount, with no invented quota threshold. The bar icon keeps the bar
+remaining amount, with no invented quota threshold. GreenPT also shows the
+account spend in EUR for the period returned by the provider, the model split
+when present, the measurement time, and a distinct stale/error label:
+`odrzucony klucz`, `brak środków`, `limit zapytań`, `niepoprawny pomiar`,
+`awaria sieci`, `brak logowania`, or `brak klucza`. The bar icon keeps the bar
 color until one of those thresholds. No provider secrets on the
 desktop. Configuration is separate from the downloadable plugin.
 
@@ -85,8 +123,10 @@ indefinitely; repeated taps during a refresh do not enqueue more requests.
 The API itself still polls providers every five minutes. Tap a card
 or the title to open `https://szymon.archea.dev`; the separate settings button
 opens configuration. The widget background does not open the website. A two-column card grid matches Omarchy: a limit bar for
-quota, the remaining amount for a prepaid balance, the same 80%/100% colors, and
-the local weekday/time format. Widget size is adjustable. No analytics or external SDKs.
+quota, the remaining amount for a prepaid balance, GreenPT spend and the same
+stale/error labels, the same 80%/100% colors, and
+the local weekday/time format. A failed client refresh keeps the last snapshot,
+including the last GreenPT balance. Widget size is adjustable. No analytics or external SDKs.
 
 GitHub Actions builds with JDK 17, Gradle 8.11.1, AGP 8.9.2 and SDK 35, runs
 lint and Android emulator instrumentation tests, and uploads a signed APK.

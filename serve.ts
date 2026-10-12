@@ -9,6 +9,7 @@ const config = JSON.parse(await Deno.readTextFile(configPath)) as {
   downloads: string;
   port?: number;
   intervalSeconds?: number;
+  greenpt?: { key?: string };
 };
 if (
   !config.credentials?.username ||
@@ -18,7 +19,13 @@ const interval = config.intervalSeconds ?? 300;
 if (!Number.isInteger(interval) || interval < 60) {
   throw new Error("Interval must be at least 60 seconds");
 }
-const cache = new Cache((id) => collect(id, config.providerHome), interval);
+if (config.greenpt?.key != null && typeof config.greenpt.key !== "string") {
+  throw new Error("Invalid GreenPT key configuration");
+}
+const cache = new Cache(
+  (id) => collect(id, config.providerHome, { greenptKey: config.greenpt?.key }),
+  interval,
+);
 await cache.refresh();
 const timer = setInterval(() => {
   void cache.refresh();
