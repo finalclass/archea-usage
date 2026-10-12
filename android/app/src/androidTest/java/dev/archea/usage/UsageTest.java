@@ -175,7 +175,14 @@ public class UsageTest extends InstrumentationTestCase {
             final ViewGroup[] found=new ViewGroup[1];
             getInstrumentation().runOnMainSync(()->{
                 int index=position-list.getFirstVisiblePosition();
-                if(index>=0 && index<list.getChildCount())found[0]=list.getChildAt(index).findViewById(R.id.card_row);
+                if(index>=0 && index<list.getChildCount()) {
+                    ViewGroup row=list.getChildAt(index).findViewById(R.id.card_row);
+                    String expected=position==0?"Grok":position==1?"GreenPT · moje":"OpenRouter";
+                    if(row!=null && row.getChildCount()>0) {
+                        TextView label=row.getChildAt(0).findViewById(R.id.provider_name);
+                        if(label!=null && expected.equals(label.getText().toString()))found[0]=row;
+                    }
+                }
             });
             if(found[0]!=null && found[0].getChildCount()>0 && found[0].getWidth()>0)return found[0];
             Thread.sleep(50);
