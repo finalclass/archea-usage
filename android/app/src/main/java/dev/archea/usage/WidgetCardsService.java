@@ -37,7 +37,10 @@ public class WidgetCardsService extends RemoteViewsService {
                 int[] size=UsageWidget.meterSize(context,AppWidgetManager.getInstance(context),widgetId,columns);
                 for(int i=0;i<columns;i++)row.addView(R.id.card_row,UsageWidget.card(context,meters.getJSONObject(start+i),size[0],size[1]));
                 return row;
-            } catch(Exception ignored) { return null; }
+            } catch(Exception error) {
+                android.util.Log.e("WidgetCardsService","Cannot render row: "+error.getClass().getSimpleName());
+                return null;
+            }
         }
         @Override public RemoteViews getLoadingView() { return null; }
         @Override public int getViewTypeCount() { return 1; }

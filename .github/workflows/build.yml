@@ -79,6 +79,7 @@ jobs:
             adb shell appwidget grantbind --package dev.archea.usage --user 0
             timeout 120 adb shell am instrument -w dev.archea.usage.test/android.test.InstrumentationTestRunner | tee instrumentation.txt
             adb logcat -d -b crash
+            adb logcat -d -s RemoteViews RemoteViewsAdapter AppWidgetHostView AppWidgetServiceImpl WidgetCardsService
             grep -q 'OK (' instrumentation.txt
             adb pull /sdcard/Android/data/dev.archea.usage/files/widget.png widget.png
             # Stop this job's emulator helpers after tests; graceful shutdown can hang.

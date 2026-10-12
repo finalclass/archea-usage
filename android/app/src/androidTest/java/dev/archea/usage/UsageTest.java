@@ -171,7 +171,16 @@ public class UsageTest extends InstrumentationTestCase {
             if(found[0]!=null && found[0].getChildCount()>0 && found[0].getWidth()>0)return found[0];
             Thread.sleep(50);
         }
-        throw new AssertionError("Widget row "+position+" did not load");
+        final StringBuilder debug=new StringBuilder();
+        getInstrumentation().runOnMainSync(()->{
+            debug.append(" count=").append(list.getCount()).append(" children=").append(list.getChildCount()).append(" size=").append(list.getWidth()).append("x").append(list.getHeight());
+            describeViews(list,debug);
+        });
+        throw new AssertionError("Widget row "+position+" did not load;"+debug);
+    }
+    private void describeViews(android.view.View view,StringBuilder debug) {
+        debug.append("\n").append(view.getClass().getSimpleName()).append(" id=").append(view.getId()).append(" size=").append(view.getWidth()).append("x").append(view.getHeight());
+        if(view instanceof ViewGroup)for(int i=0;i<((ViewGroup)view).getChildCount();i++)describeViews(((ViewGroup)view).getChildAt(i),debug);
     }
     private void assertUnclipped(TextView text) {
         android.text.Layout layout=text.getLayout();
