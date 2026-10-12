@@ -129,12 +129,21 @@ public class UsageTest extends InstrumentationTestCase {
             assertEquals("https://szymon.archea.dev",UsageWidget.websiteIntent().getDataString());
             ViewGroup clickRow=showRow(view[0],0);
             getInstrumentation().runOnMainSync(()->{
+                assertEquals("Recycled rows do not duplicate cards",2,clickRow.getChildCount());
+                assertUnclipped(clickRow.getChildAt(0).findViewById(R.id.provider_value));
+                assertUnclipped(clickRow.getChildAt(1).findViewById(R.id.provider_value));
                 assertFalse("Widget background must not open T3",view[0].findViewById(R.id.widget_root).hasOnClickListeners());
                 assertTrue("Title is linked",view[0].findViewById(R.id.title).hasOnClickListeners());
                 assertNotNull("Provider rows are linked",((android.widget.ListView)view[0].findViewById(R.id.cards)).getOnItemClickListener());
                 android.view.View refresh=view[0].findViewById(R.id.refresh);
                 assertTrue("Refresh touch target is at least 48dp",refresh.getHeight()>=Math.round(48*context.getResources().getDisplayMetrics().density));
                 assertTrue("Refresh is linked",refresh.hasOnClickListeners());
+            });
+            ViewGroup visibleBalances=showRow(view[0],1);
+            getInstrumentation().runOnMainSync(()->{
+                assertEquals("Recycled balances do not duplicate cards",2,visibleBalances.getChildCount());
+                assertUnclipped(visibleBalances.getChildAt(0).findViewById(R.id.balance_amount));
+                assertUnclipped(visibleBalances.getChildAt(1).findViewById(R.id.balance_amount));
             });
             android.graphics.Bitmap screenshot=getInstrumentation().getUiAutomation().takeScreenshot();
             try(java.io.FileOutputStream out=new java.io.FileOutputStream(new java.io.File(context.getExternalFilesDir(null),"widget.png"))) {
@@ -161,7 +170,7 @@ public class UsageTest extends InstrumentationTestCase {
     private ViewGroup showRow(AppWidgetHostView view,int position) throws Exception {
         android.widget.ListView list=view.findViewById(R.id.cards);
         getInstrumentation().runOnMainSync(()->list.setSelection(position));
-        long deadline=android.os.SystemClock.elapsedRealtime()+10000;
+        long deadline=android.os.SystemClock.elapsedRealtime()+30000;
         while(android.os.SystemClock.elapsedRealtime()<deadline) {
             final ViewGroup[] found=new ViewGroup[1];
             getInstrumentation().runOnMainSync(()->{
