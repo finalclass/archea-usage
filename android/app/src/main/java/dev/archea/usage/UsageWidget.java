@@ -128,7 +128,6 @@ public class UsageWidget extends AppWidgetProvider {
         boolean failed=!meter.isNull("error");
         card.setTextViewText(R.id.provider_updated,Api.statusLine(meter));
         card.setTextColor(R.id.provider_updated,stale||failed?WARNING:FAINT);
-        card.setOnClickFillInIntent(R.id.card,new Intent());
         return card;
     }
     static void draw(Context c) {

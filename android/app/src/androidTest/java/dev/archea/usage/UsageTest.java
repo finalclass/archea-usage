@@ -131,8 +131,7 @@ public class UsageTest extends InstrumentationTestCase {
             getInstrumentation().runOnMainSync(()->{
                 assertFalse("Widget background must not open T3",view[0].findViewById(R.id.widget_root).hasOnClickListeners());
                 assertTrue("Title is linked",view[0].findViewById(R.id.title).hasOnClickListeners());
-                ViewGroup row=clickRow;
-                assertTrue("Provider card is linked",row.getChildAt(0).hasOnClickListeners());
+                assertNotNull("Provider rows are linked",((android.widget.ListView)view[0].findViewById(R.id.cards)).getOnItemClickListener());
                 android.view.View refresh=view[0].findViewById(R.id.refresh);
                 assertTrue("Refresh touch target is at least 48dp",refresh.getHeight()>=Math.round(48*context.getResources().getDisplayMetrics().density));
                 assertTrue("Refresh is linked",refresh.hasOnClickListeners());

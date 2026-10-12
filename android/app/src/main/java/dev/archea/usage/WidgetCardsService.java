@@ -31,6 +31,7 @@ public class WidgetCardsService extends RemoteViewsService {
             if(position<0 || position>=getCount())return null;
             try {
                 RemoteViews row=new RemoteViews(context.getPackageName(),R.layout.widget_row);
+                row.setOnClickFillInIntent(R.id.card_row,new Intent());
                 int start=position*2;
                 int columns=Math.min(2,meters.length()-start);
                 int[] size=UsageWidget.meterSize(context,AppWidgetManager.getInstance(context),widgetId,columns);
