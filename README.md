@@ -1,6 +1,6 @@
 # Archea Usage
 
-One self-hosted Deno service for Grok subscription usage, Codex quota windows,
+One self-hosted Deno service for Codex quota windows,
 OpenRouter and GreenPT account credit balances. Includes an Omarchy Quickshell plugin and
 a native Android home-screen widget. No CodexBar dependency.
 
@@ -52,6 +52,9 @@ issuers are supported; credentials are never sent to a configured alternate issu
 300 seconds, independently of client requests. Failed polls retain the last
 successful reading with `stale: true` and a sanitized error. Missing values are
 null/unavailable, never fabricated zero values. Times are UTC ISO 8601.
+
+Grok is excluded from the active providers and is not polled. Both widgets remove
+its card on their next successful refresh, without a client update.
 
 All routes require HTTP Basic Authentication, including `/health`, `/`, and:
 

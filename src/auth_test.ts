@@ -231,9 +231,7 @@ for (const id of ["grok", "codex"]) {
         }
         return fail ? new Response(null, { status: 401 }) : reading(id);
       };
-      const cache = new Cache(async (provider) =>
-        provider === id ? await collect(id, home) : { id: provider } as any
-      );
+      const cache = new Cache((provider) => collect(provider, home), 300, [id]);
       await cache.refresh();
       const old = cache.meters.find((meter) => meter.id === id)!;
       fail = true;
