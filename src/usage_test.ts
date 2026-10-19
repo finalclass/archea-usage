@@ -62,7 +62,7 @@ Deno.test("cache coalesces calls and preserves last success after failure", asyn
     return { ...empty(id), updatedAt: "2026-10-02T00:00:00Z", stale: false };
   });
   await Promise.all([c.refresh(), c.refresh(), c.refresh()]);
-  assert(calls === 4);
+  assert(calls === 3);
   fail = true;
   await c.refresh();
   assert(
@@ -122,6 +122,44 @@ Deno.test("API requires Basic Auth for every route and never polls on requests",
 Deno.test("widget does not show missing readings as zero", () => {
   const r = render([empty("greenpt", "not_implemented_in_operators")]);
   assert(r.text === "AI —" && r.tooltip.includes("Brak danych"));
+});
+
+Deno.test("shared widget snapshot excludes Grok and never polls it", async () => {
+  const home = await Deno.makeTempDir();
+  try {
+    for (const ids of [undefined, await meterIds(home)]) {
+      const polled: string[] = [];
+      const cache = new Cache(
+        (id) => {
+          polled.push(id);
+          return Promise.resolve(empty(id));
+        },
+        300,
+        ids,
+      );
+      await cache.refresh();
+      const api = handler(cache, {
+        username: "usage",
+        passwordHash: await hash("test-password"),
+      }, "/nonexistent");
+      const response = await api(
+        new Request("https://example.com/v1/usage", {
+          headers: { Authorization: "Basic " + btoa("usage:test-password") },
+        }),
+      );
+      assert(response.status === 200);
+      const snapshot = await response.json();
+      assert(snapshot.version === 1);
+      assert(
+        snapshot.meters.map((m: { id: string }) => m.id).join(",") ===
+          "codex,openrouter,greenpt",
+      );
+      assert(polled.join(",") === "codex,openrouter,greenpt");
+      assert(render(snapshot.meters).cards.every((card) => card.id !== "grok"));
+    }
+  } finally {
+    await Deno.remove(home, { recursive: true });
+  }
 });
 
 Deno.test("GreenPT balance requires a numeric response header and preserves zero", () => {
@@ -332,9 +370,10 @@ Deno.test("both GreenPT accounts are collected, cached and rendered independentl
       JSON.stringify({ greenpt: { key: "original-test-key" } }),
     );
     const ids = await meterIds(home, "additional-test-key");
-    assert(ids.length === 5 && ids.includes("greenpt_opencode"));
-    assert((await meterIds(home)).length === 4);
-    assert((await meterIds(home, " original-test-key ")).length === 4);
+    assert(ids.length === 4 && ids.includes("greenpt_opencode"));
+    assert(!ids.includes("grok"));
+    assert((await meterIds(home)).length === 3);
+    assert((await meterIds(home, " original-test-key ")).length === 3);
     let failOriginal = false;
     const keys: string[] = [];
     globalThis.fetch = (_input, init) => {
@@ -379,7 +418,8 @@ Deno.test("both GreenPT accounts are collected, cached and rendered independentl
     );
     const json = JSON.stringify(cache.snapshot());
     assert(
-      !json.includes("test-key") && render(cache.meters).cards.length === 5,
+      !json.includes("test-key") && !json.includes('"grok"') &&
+        render(cache.meters).cards.length === 4,
     );
     failOriginal = true;
     await cache.refresh();
@@ -390,7 +430,7 @@ Deno.test("both GreenPT accounts are collected, cached and rendered independentl
     );
     assert(!cache.meters.find((m) => m.id === "greenpt")!.stale);
     await Deno.remove(`${home}/.local/share/opencode/auth.json`);
-    assert((await meterIds(home, "additional-test-key")).length === 5);
+    assert((await meterIds(home, "additional-test-key")).length === 4);
   } finally {
     globalThis.fetch = originalFetch;
     await Deno.remove(home, { recursive: true });

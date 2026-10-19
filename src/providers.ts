@@ -34,6 +34,7 @@ export const labels: Record<string, string> = {
   openrouter: "OpenRouter",
   greenpt: "GreenPT",
 };
+export const activeMeterIds = ["codex", "openrouter", "greenpt"];
 export function empty(id: string, error: string | null = null): Meter {
   return {
     id,
@@ -154,7 +155,7 @@ export async function meterIds(
   home: string,
   configured?: string | null,
 ): Promise<string[]> {
-  const defaults = Object.keys(labels);
+  const defaults = activeMeterIds;
   const explicit = configured?.trim();
   if (!explicit) return defaults;
   try {
@@ -162,7 +163,7 @@ export async function meterIds(
   } catch {
     // A broken original login must be visible independently of the second account.
   }
-  return ["grok", "codex", "greenpt_opencode", "greenpt", "openrouter"];
+  return ["codex", "greenpt_opencode", "greenpt", "openrouter"];
 }
 const greenptAgents = "https://api.greenpt.ai/v1/agents";
 const greenptUsage = "https://api.greenpt.ai/v1/agents/usage";

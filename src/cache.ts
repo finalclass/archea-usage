@@ -1,4 +1,4 @@
-import { empty, labels, type Meter, safeError } from "./providers.ts";
+import { activeMeterIds, empty, type Meter, safeError } from "./providers.ts";
 export class Cache {
   meters: Meter[];
   private pending: Promise<void> | null = null;
@@ -6,7 +6,7 @@ export class Cache {
   constructor(
     private fetcher: (id: string) => Promise<Meter>,
     readonly intervalSeconds = 300,
-    ids: string[] = Object.keys(labels),
+    ids: string[] = activeMeterIds,
   ) {
     this.meters = ids.map((id) => {
       const meter = empty(id);
