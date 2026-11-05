@@ -29,12 +29,15 @@ export type Meter = {
   error: string | null;
 };
 export const labels: Record<string, string> = {
+  claude: "Claude",
   grok: "Grok",
   codex: "Codex",
   openrouter: "OpenRouter",
   greenpt: "GreenPT",
 };
-export const activeMeterIds = ["codex", "openrouter", "greenpt"];
+export const activeMeterIds = ["codex", "grok", "openrouter", "greenpt"];
+// Pushed meters are measured on another machine and sent to /v1/push/<id>.
+export const pushedMeterIds = ["claude"];
 export function empty(id: string, error: string | null = null): Meter {
   return {
     id,
@@ -80,6 +83,59 @@ export function parseGrok(data: any): Window[] {
       c.billingPeriodEnd ?? c.weeklyResetAt ?? c.creditResetAt ?? c.resetAt,
     ),
   }];
+}
+// Claude subscription limits from the Claude Code OAuth usage endpoint.
+export function parseClaude(data: any): Window[] {
+  const windows: Window[] = [];
+  for (const [key, label] of [["five_hour", "5h"], ["seven_day", "weekly"]]) {
+    const w = data?.[key];
+    if (w && num(w.utilization)) {
+      windows.push({
+        label,
+        usedPercent: w.utilization,
+        resetsAt: reset(w.resets_at),
+      });
+    }
+  }
+  return windows;
+}
+export const pushErrors = new Set([
+  "auth_expired",
+  "login_required",
+  "credentials_missing",
+  "invalid_response",
+  "provider_unavailable",
+]);
+// Validates a reading pushed by a remote collector. Only public numbers pass.
+export function parsePushed(
+  body: unknown,
+): { windows: Window[] } | { error: string } | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  const row = body as Record<string, unknown>;
+  if (typeof row.error === "string") {
+    return pushErrors.has(row.error) || /^provider_http_\d{3}$/.test(row.error)
+      ? { error: row.error }
+      : null;
+  }
+  if (!Array.isArray(row.windows) || !row.windows.length) return null;
+  if (row.windows.length > 6) return null;
+  const windows: Window[] = [];
+  for (const item of row.windows) {
+    if (!item || typeof item !== "object") return null;
+    const w = item as Record<string, unknown>;
+    if (typeof w.label !== "string" || !/^[a-z0-9-]{1,32}$/.test(w.label)) {
+      return null;
+    }
+    if (!num(w.usedPercent) || w.usedPercent < 0 || w.usedPercent > 1000) {
+      return null;
+    }
+    const resetsAt = w.resetsAt == null ? null : reset(w.resetsAt);
+    if (w.resetsAt != null && (typeof w.resetsAt !== "string" || !resetsAt)) {
+      return null;
+    }
+    windows.push({ label: w.label, usedPercent: w.usedPercent, resetsAt });
+  }
+  return { windows };
 }
 export function parseBalance(data: any): number {
   const d = data.data;
@@ -154,8 +210,10 @@ export async function resolveGreenptKey(
 export async function meterIds(
   home: string,
   configured?: string | null,
+  options: { pushed?: boolean } = {},
 ): Promise<string[]> {
-  const defaults = activeMeterIds;
+  const pushed = options.pushed ? pushedMeterIds : [];
+  const defaults = [...pushed, ...activeMeterIds];
   const explicit = configured?.trim();
   if (!explicit) return defaults;
   try {
@@ -163,7 +221,14 @@ export async function meterIds(
   } catch {
     // A broken original login must be visible independently of the second account.
   }
-  return ["codex", "greenpt_opencode", "greenpt", "openrouter"];
+  return [
+    ...pushed,
+    "codex",
+    "grok",
+    "openrouter",
+    "greenpt_opencode",
+    "greenpt",
+  ];
 }
 const greenptAgents = "https://api.greenpt.ai/v1/agents";
 const greenptUsage = "https://api.greenpt.ai/v1/agents/usage";
@@ -285,7 +350,7 @@ export async function collect(
 export function safeError(e: unknown): string {
   const message = e instanceof Error ? e.message : "";
   if (
-    /^(provider_http_\d{3}|login_required|invalid_response|auth_refresh_failed|credentials_write_failed)$/
+    /^(provider_http_\d{3}|login_required|invalid_response|auth_refresh_failed|credentials_write_failed|auth_expired)$/
       .test(message)
   ) {
     return message;

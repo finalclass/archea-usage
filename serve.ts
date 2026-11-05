@@ -10,6 +10,7 @@ const config = JSON.parse(await Deno.readTextFile(configPath)) as {
   port?: number;
   intervalSeconds?: number;
   greenpt?: { key?: string };
+  push?: { tokenHash?: string };
 };
 if (
   !config.credentials?.username ||
@@ -22,10 +23,16 @@ if (!Number.isInteger(interval) || interval < 60) {
 if (config.greenpt?.key != null && typeof config.greenpt.key !== "string") {
   throw new Error("Invalid GreenPT key configuration");
 }
+const push = config.push?.tokenHash;
+if (push != null && !/^[a-f0-9]{64}$/.test(push)) {
+  throw new Error("Invalid push configuration");
+}
 const cache = new Cache(
   (id) => collect(id, config.providerHome, { greenptKey: config.greenpt?.key }),
   interval,
-  await meterIds(config.providerHome, config.greenpt?.key),
+  await meterIds(config.providerHome, config.greenpt?.key, {
+    pushed: push != null,
+  }),
 );
 await cache.refresh();
 const timer = setInterval(() => {
@@ -33,7 +40,12 @@ const timer = setInterval(() => {
 }, interval * 1000);
 const server = Deno.serve(
   { hostname: "127.0.0.1", port: config.port ?? 7350 },
-  handler(cache, config.credentials, config.downloads),
+  handler(
+    cache,
+    config.credentials,
+    config.downloads,
+    push ? { tokenHash: push } : undefined,
+  ),
 );
 Deno.addSignalListener("SIGTERM", () => {
   clearInterval(timer);

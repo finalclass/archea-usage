@@ -1,5 +1,8 @@
 import { Cache } from "./cache.ts";
+import { parsePushed } from "./providers.ts";
 export type Credentials = { username: string; passwordHash: string };
+/** SHA-256 of the bearer token used by remote collectors (for example ROG). */
+export type PushCredentials = { tokenHash: string };
 export async function hash(value: string): Promise<string> {
   const digest = await crypto.subtle.digest(
     "SHA-256",
@@ -43,8 +46,75 @@ const baseHeaders = {
   "Cache-Control": "no-store",
   "X-Content-Type-Options": "nosniff",
 };
-export function handler(cache: Cache, creds: Credentials, downloads: string) {
+const pushLimit = 16384;
+// Reads at most `limit` bytes; returns null and stops reading when exceeded.
+async function readLimited(
+  req: Request,
+  limit: number,
+): Promise<Uint8Array | null> {
+  if (!req.body) return new Uint8Array();
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > limit) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return bytes;
+}
+async function pushed(
+  req: Request,
+  cache: Cache,
+  push: PushCredentials | undefined,
+  id: string,
+): Promise<Response> {
+  const reply = (status: number, extra: Record<string, string> = {}) =>
+    new Response(null, { status, headers: { ...baseHeaders, ...extra } });
+  if (!push || !cache.accepts(id)) return reply(404);
+  const header = req.headers.get("authorization") ?? "";
+  const token = /^Bearer (.+)$/i.exec(header)?.[1] ?? "";
+  if (!token || !equal(await hash(token), push.tokenHash)) {
+    return reply(401, { "WWW-Authenticate": 'Bearer realm="Archea Usage"' });
+  }
+  if (req.method !== "POST") return reply(405, { Allow: "POST" });
+  const declared = Number(req.headers.get("content-length") ?? 0);
+  if (declared > pushLimit) return reply(413);
+  let body: unknown;
+  try {
+    const bytes = await readLimited(req, pushLimit);
+    if (!bytes) return reply(413);
+    body = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  } catch {
+    return reply(400);
+  }
+  const reading = parsePushed(body);
+  if (!reading) return reply(400);
+  cache.accept(id, reading);
+  return reply(204);
+}
+export function handler(
+  cache: Cache,
+  creds: Credentials,
+  downloads: string,
+  push?: PushCredentials,
+) {
   return async (req: Request): Promise<Response> => {
+    const pushRoute = /^\/v1\/push\/([a-z0-9_]+)$/.exec(
+      new URL(req.url).pathname,
+    );
+    if (pushRoute) return await pushed(req, cache, push, pushRoute[1]);
     if (!await authorized(req, creds)) {
       return new Response("Authentication required", {
         status: 401,

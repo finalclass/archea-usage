@@ -1,6 +1,6 @@
 # Archea Usage
 
-One self-hosted Deno service for Codex quota windows,
+One self-hosted Deno service for Claude, Codex and Grok quota windows,
 OpenRouter and GreenPT account credit balances. Includes an Omarchy Quickshell plugin and
 a native Android home-screen widget. No CodexBar dependency.
 
@@ -53,8 +53,39 @@ issuers are supported; credentials are never sent to a configured alternate issu
 successful reading with `stale: true` and a sanitized error. Missing values are
 null/unavailable, never fabricated zero values. Times are UTC ISO 8601.
 
-Grok is excluded from the active providers and is not polled. Both widgets remove
-its card on their next successful refresh, without a client update.
+Codex, Grok, OpenRouter and GreenPT are polled on Archea. Claude is pushed from
+ROG (see below) because Claude Code is logged in only there.
+
+## Claude from ROG
+
+Claude Code stays on ROG; nothing Claude-related is installed on Archea. A
+systemd user timer on ROG runs `rog/claude-push.ts` every five minutes. It reads
+the OAuth access token from `~/.claude/.credentials.json` (or
+`$CLAUDE_CONFIG_DIR`) read-only, calls
+`GET https://api.anthropic.com/api/oauth/usage` (internal endpoint, may change),
+and sends only the five-hour and weekly utilization with reset times to
+`POST /v1/push/claude`. The token never leaves ROG and is never renewed by the
+collector, so Claude Code remains the only owner of its login. When the token
+has expired because Claude Code has not run for a while, the collector reports
+`auth_expired` (`sesja wygasła`) and the last reading stays visible as stale.
+If Archea receives nothing for three intervals (15 minutes), the card is marked
+`source_offline` (`źródło offline`), for example while ROG is asleep.
+
+The push route uses its own bearer token, not the Basic Auth login of the
+widgets. Generate it on ROG and store the SHA-256 on Archea:
+
+```
+token=$(openssl rand -hex 32)
+printf '%s' "$token" | sha256sum   # → push.tokenHash in server.json on Archea
+deno run --allow-env=HOME,CLAUDE_CONFIG_DIR --allow-read --allow-write rog/install.ts
+# put the token in ~/.config/archea-usage/push.json (mode 600)
+systemctl --user daemon-reload && systemctl --user enable --now archea-usage-claude.timer
+```
+
+Server configuration: `"push": { "tokenHash": "<64 hex>" }`. Without it the
+push route returns 404 and no Claude card is shown. Pushed bodies are limited to
+16 KB, six windows, known error codes and numeric percentages; anything else is
+rejected with 400.
 
 All routes require HTTP Basic Authentication, including `/health`, `/`, and:
 
@@ -103,13 +134,15 @@ keep mode 600. Enable using `omarchy plugin enable archea.usage` and restart the
 shell when required. The plugin uses the existing Deno runtime, polls only our
 API every five minutes. Left or right click on the bar icon toggles the cards.
 The close button hides them. Resets use the local device timezone and Polish
-weekday/hour format, for example `środa, 07:51`. Each quota card shows a limit
-bar and turns yellow at 80% usage and red at 100%. A prepaid balance shows the
+short weekday/hour format, for example `5 h · do śr. 07:51`. Cards are compact:
+one line and a thin limit bar per quota window, the highest usage in the card
+header, and a status line only when a reading is stale or failed. Each quota
+card turns yellow at 80% usage and red at 100%. A prepaid balance shows the
 remaining amount, with no invented quota threshold. GreenPT also shows the
-account spend in EUR for the period returned by the provider, the model split
-when present, the measurement time, and a distinct stale/error label:
-`odrzucony klucz`, `brak środków`, `limit zapytań`, `niepoprawny pomiar`,
-`awaria sieci`, `brak logowania`, or `brak klucza`. The bar icon keeps the bar
+account spend in EUR for the period returned by the provider, and a distinct
+stale/error label: `odrzucony klucz`, `brak środków`, `limit zapytań`,
+`niepoprawny pomiar`, `awaria sieci`, `brak logowania`, `brak klucza`,
+`sesja wygasła`, or `źródło offline`. The bar icon keeps the bar
 color until one of those thresholds. No provider secrets on the
 desktop. Configuration is separate from the downloadable plugin.
 
@@ -131,11 +164,11 @@ The API itself still polls providers every five minutes. Tap a card
 or the title to open `https://szymon.archea.dev`; the separate settings button
 opens configuration. The widget background does not open the website. A scrollable two-column card grid displays every account, including both GreenPT
 accounts. Rows grow with their content instead of clipping it to a fixed height.
-Names and reset dates wrap; balance amounts shrink to fit the card width and
-the currency has its own line. The cards match Omarchy: a limit bar for
-quota, the remaining amount for a prepaid balance, GreenPT spend and the same
-stale/error labels, the same 80%/100% colors, and
-the local weekday/time format. A failed client refresh keeps the last snapshot,
+Names and reset dates wrap; balance amounts shrink to fit next to the currency.
+The compact cards match Omarchy: one line and a thin bar per quota window, the
+remaining amount for a prepaid balance, GreenPT spend, the same stale/error
+labels shown only when needed, the same 80%/100% colors, and the local short
+weekday/time format. A failed client refresh keeps the last snapshot,
 including the last GreenPT balance. Widget size is adjustable. No analytics or external SDKs.
 
 GitHub Actions builds with JDK 17, Gradle 8.11.1, AGP 8.9.2 and SDK 35, runs
@@ -146,7 +179,8 @@ upgrades.
 
 ## Deployment and rollback
 
-See `deployment/` for the unit and proxy template. The unit uses an example
+See `deployment/` for the unit and proxy template. The push route needs no
+extra outbound network permission on Archea. The unit uses an example
 `usage` account and `/home/usage`; replace these with the service owner's account,
 home and checkout paths. OAuth renewal requires read/write access to the owner's
 `.grok` and `.codex` directories (for locks and atomic token replacement), plus

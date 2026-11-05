@@ -3,10 +3,12 @@ import {
   empty,
   meterIds,
   parseBalance,
+  parseClaude,
   parseCodex,
   parseGreenBalance,
   parseGreenSpend,
   parseGrok,
+  parsePushed,
   readGreenpt,
   resolveGreenptKey,
   safeError,
@@ -19,7 +21,9 @@ import {
   money,
   render,
   resetLabel,
+  shortResetLabel,
 } from "../omarchy/usage-widget.ts";
+import { pushUrl, readClaude } from "../rog/claude-push.ts";
 function assert(value: unknown, message = "Assertion failed"): asserts value {
   if (!value) throw new Error(message);
 }
@@ -62,7 +66,7 @@ Deno.test("cache coalesces calls and preserves last success after failure", asyn
     return { ...empty(id), updatedAt: "2026-10-02T00:00:00Z", stale: false };
   });
   await Promise.all([c.refresh(), c.refresh(), c.refresh()]);
-  assert(calls === 3);
+  assert(calls === 4);
   fail = true;
   await c.refresh();
   assert(
@@ -124,7 +128,7 @@ Deno.test("widget does not show missing readings as zero", () => {
   assert(r.text === "AI —" && r.tooltip.includes("Brak danych"));
 });
 
-Deno.test("shared widget snapshot excludes Grok and never polls it", async () => {
+Deno.test("shared widget snapshot includes Grok and polls it", async () => {
   const home = await Deno.makeTempDir();
   try {
     for (const ids of [undefined, await meterIds(home)]) {
@@ -152,14 +156,309 @@ Deno.test("shared widget snapshot excludes Grok and never polls it", async () =>
       assert(snapshot.version === 1);
       assert(
         snapshot.meters.map((m: { id: string }) => m.id).join(",") ===
-          "codex,openrouter,greenpt",
+          "codex,grok,openrouter,greenpt",
       );
-      assert(polled.join(",") === "codex,openrouter,greenpt");
-      assert(render(snapshot.meters).cards.every((card) => card.id !== "grok"));
+      assert(polled.join(",") === "codex,grok,openrouter,greenpt");
+      assert(render(snapshot.meters).cards.some((card) => card.id === "grok"));
     }
   } finally {
     await Deno.remove(home, { recursive: true });
   }
+});
+Deno.test("Claude limits come from five-hour and weekly windows", () => {
+  const w = parseClaude({
+    five_hour: {
+      utilization: 9,
+      resets_at: "2026-11-05T12:50:00.578879+00:00",
+    },
+    seven_day: { utilization: 0, resets_at: "2026-11-09T23:00:00+00:00" },
+    seven_day_opus: null,
+  });
+  assert(w.length === 2 && w[0].label === "5h" && w[1].label === "weekly");
+  assert(
+    w[0].resetsAt === "2026-11-05T12:50:00.578Z" && w[1].usedPercent === 0,
+  );
+  assert(parseClaude({ five_hour: null }).length === 0);
+  assert(parseClaude(null).length === 0);
+});
+Deno.test("pushed readings accept only public, bounded numbers", () => {
+  const ok = parsePushed({
+    windows: [{
+      label: "5h",
+      usedPercent: 9,
+      resetsAt: "2026-11-05T12:50:00Z",
+    }],
+  });
+  assert(ok && "windows" in ok && ok.windows[0].resetsAt?.endsWith("Z"));
+  assert(
+    JSON.stringify(parsePushed({ error: "auth_expired" })) ===
+      '{"error":"auth_expired"}',
+  );
+  assert(parsePushed({ error: "provider_http_503" }) !== null);
+  for (
+    const bad of [
+      null,
+      [],
+      { windows: [] },
+      { error: "secret token leaked" },
+      { windows: [{ label: "5H", usedPercent: 1, resetsAt: null }] },
+      { windows: [{ label: "5h", usedPercent: -1, resetsAt: null }] },
+      { windows: [{ label: "5h", usedPercent: "9", resetsAt: null }] },
+      { windows: [{ label: "5h", usedPercent: 9, resetsAt: "never" }] },
+      { windows: [{ label: "5h", usedPercent: 9, resetsAt: 1800000000 }] },
+      {
+        windows: Array(7).fill({ label: "5h", usedPercent: 1, resetsAt: null }),
+      },
+    ]
+  ) assert(parsePushed(bad) === null, JSON.stringify(bad));
+});
+Deno.test("Claude push needs its own token and becomes stale when ROG stops", async () => {
+  let now = Date.parse("2026-11-05T10:00:00Z");
+  const polled: string[] = [];
+  const home = await Deno.makeTempDir();
+  try {
+    const ids = await meterIds(home, null, { pushed: true });
+    assert(ids.join(",") === "claude,codex,grok,openrouter,greenpt");
+    const cache = new Cache(
+      (id) => {
+        polled.push(id);
+        return Promise.resolve(empty(id));
+      },
+      300,
+      ids,
+      () => now,
+    );
+    await cache.refresh();
+    assert(!polled.includes("claude"));
+    const basic = { Authorization: "Basic " + btoa("usage:test-password") };
+    const creds = {
+      username: "usage",
+      passwordHash: await hash("test-password"),
+    };
+    const api = handler(cache, creds, "/nonexistent", {
+      tokenHash: await hash("push-token"),
+    });
+    const push = (body: unknown, auth = "Bearer push-token", path = "claude") =>
+      api(
+        new Request("https://example.com/v1/push/" + path, {
+          method: "POST",
+          headers: { Authorization: auth, "Content-Type": "application/json" },
+          body: typeof body === "string" ? body : JSON.stringify(body),
+        }),
+      );
+    const reading = {
+      windows: [
+        { label: "5h", usedPercent: 9, resetsAt: "2026-11-05T12:50:00Z" },
+        { label: "weekly", usedPercent: 3, resetsAt: "2026-11-09T23:00:00Z" },
+      ],
+    };
+    const claude = async () => {
+      const r = await api(
+        new Request("https://example.com/v1/usage", { headers: basic }),
+      );
+      return (await r.json()).meters[0];
+    };
+    assert((await claude()).error === "source_offline");
+    assert((await push(reading, "Bearer wrong")).status === 401);
+    assert((await push(reading, basic.Authorization)).status === 401);
+    assert((await push(reading, "Bearer push-token", "codex")).status === 404);
+    assert((await push("{")).status === 400);
+    assert((await push({ windows: [{ label: "5h" }] })).status === 400);
+    assert((await push("x".repeat(20000))).status === 413);
+    assert((await claude()).windows.length === 0);
+    assert((await push(reading)).status === 204);
+    let meter = await claude();
+    assert(meter.id === "claude" && meter.label === "Claude");
+    assert(!meter.stale && meter.error === null && meter.windows.length === 2);
+    assert(meter.updatedAt === "2026-11-05T10:00:00.000Z");
+    await cache.refresh();
+    assert(!polled.includes("claude") && (await claude()).windows.length === 2);
+    now += 10 * 60 * 1000;
+    assert((await push({ error: "auth_expired" })).status === 204);
+    meter = await claude();
+    assert(meter.stale && meter.error === "auth_expired");
+    assert(meter.windows[0].usedPercent === 9);
+    assert(meter.updatedAt === "2026-11-05T10:00:00.000Z");
+    now += 16 * 60 * 1000;
+    meter = await claude();
+    assert(meter.stale && meter.error === "source_offline");
+    assert(meter.windows.length === 2);
+    assert(render([meter]).cards[0].status.includes("źródło offline"));
+    const disabled = handler(cache, creds, "/nonexistent");
+    assert(
+      (await disabled(
+        new Request("https://example.com/v1/push/claude", {
+          method: "POST",
+          headers: { Authorization: "Bearer push-token" },
+          body: JSON.stringify(reading),
+        }),
+      )).status === 404,
+    );
+    const getPush = await api(
+      new Request("https://example.com/v1/push/claude", {
+        headers: { Authorization: "Bearer push-token" },
+      }),
+    );
+    assert(getPush.status === 405);
+  } finally {
+    await Deno.remove(home, { recursive: true });
+  }
+});
+Deno.test("a push during a provider poll is not overwritten", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => release = resolve);
+  const cache = new Cache(
+    async (id) => {
+      await gate;
+      return { ...empty(id), stale: false };
+    },
+    300,
+    ["claude", "codex"],
+  );
+  const polling = cache.refresh();
+  cache.accept("claude", {
+    windows: [{ label: "5h", usedPercent: 25, resetsAt: null }],
+  });
+  release();
+  await polling;
+  const claude = cache.snapshot().meters[0];
+  assert(claude.windows[0]?.usedPercent === 25 && !claude.stale);
+  assert(!cache.snapshot().meters[1].stale);
+});
+Deno.test("an oversized chunked push is rejected without reading it all", async () => {
+  const cache = new Cache(() => Promise.resolve(empty("x")), 300, ["claude"]);
+  const api = handler(
+    cache,
+    {
+      username: "usage",
+      passwordHash: await hash("test-password"),
+    },
+    "/nonexistent",
+    { tokenHash: await hash("push-token") },
+  );
+  let sent = 0;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (sent >= 1024 * 1024) return controller.close();
+      sent += 4096;
+      controller.enqueue(new Uint8Array(4096));
+    },
+  });
+  const r = await api(
+    new Request("https://example.com/v1/push/claude", {
+      method: "POST",
+      headers: { Authorization: "Bearer push-token" },
+      body,
+    }),
+  );
+  assert(r.status === 413 && sent < 64 * 1024, `read ${sent} bytes`);
+});
+Deno.test("ROG collector reads Claude limits without exposing the token", async () => {
+  const dir = await Deno.makeTempDir();
+  const path = `${dir}/.credentials.json`;
+  const now = Date.parse("2026-11-05T10:00:00Z");
+  try {
+    assert(
+      JSON.stringify(await readClaude(path, undefined, now)) ===
+        '{"error":"credentials_missing"}',
+    );
+    await Deno.writeTextFile(path, JSON.stringify({ claudeAiOauth: {} }));
+    assert(
+      "error" in await readClaude(path, undefined, now) &&
+        (await readClaude(path, undefined, now) as { error: string }).error ===
+          "login_required",
+    );
+    await Deno.writeTextFile(
+      path,
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: "secret-access",
+          refreshToken: "secret-refresh",
+          expiresAt: now + 60000,
+        },
+      }),
+    );
+    const seen: string[] = [];
+    let status = 200;
+    const fake = (url: string, init?: RequestInit) => {
+      seen.push(url + " " + new Headers(init?.headers).get("Authorization"));
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            five_hour: { utilization: 9, resets_at: "2026-11-05T12:50:00Z" },
+            seven_day: { utilization: 3, resets_at: "2026-11-09T23:00:00Z" },
+          }),
+          { status },
+        ),
+      );
+    };
+    const reading = await readClaude(path, fake, now);
+    assert("windows" in reading && reading.windows.length === 2);
+    assert(!JSON.stringify(reading).includes("secret"));
+    assert(
+      seen[0] ===
+        "https://api.anthropic.com/api/oauth/usage Bearer secret-access",
+    );
+    status = 401;
+    assert(
+      (await readClaude(path, fake, now) as { error: string }).error ===
+        "auth_expired",
+    );
+    status = 503;
+    assert(
+      (await readClaude(path, fake, now) as { error: string }).error ===
+        "provider_http_503",
+    );
+    assert(
+      (await readClaude(path, () => Promise.reject(new Error("x")), now) as {
+        error: string;
+      }).error === "provider_unavailable",
+    );
+    const calls = seen.length;
+    assert(
+      (await readClaude(path, fake, now + 120000) as { error: string })
+            .error === "auth_expired" && seen.length === calls,
+      "an expired token is not sent",
+    );
+    assert(pushUrl("https://usage.example.com").pathname === "/v1/push/claude");
+    assert(pushUrl("http://127.0.0.1:7350").port === "7350");
+    let rejected = false;
+    try {
+      pushUrl("http://usage.example.com");
+    } catch {
+      rejected = true;
+    }
+    assert(rejected, "remote HTTP is rejected");
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+Deno.test("compact cards use one line per limit and show status only on problems", () => {
+  const r = render([
+    {
+      ...empty("claude"),
+      stale: false,
+      updatedAt: "2026-11-05T10:00:00Z",
+      windows: [
+        { label: "5h", usedPercent: 9, resetsAt: "2026-11-05T12:50:00Z" },
+        { label: "weekly", usedPercent: 3, resetsAt: null },
+      ],
+    },
+    { ...empty("grok", "provider_unavailable"), updatedAt: null },
+  ]);
+  const claude = r.cards[0];
+  assert(claude.label === "Claude" && claude.alert === false);
+  assert(
+    claude.windows[0].line ===
+      "5 h · do " + shortResetLabel("2026-11-05T12:50:00Z"),
+  );
+  assert(claude.windows[1].line === "Tydzień");
+  assert(/^\S+\. \d{2}:\d{2}$/.test(shortResetLabel("2026-11-05T12:50:00Z")));
+  assert(
+    r.cards[1].alert === true && r.cards[1].status.includes("awaria sieci"),
+  );
+  assert(errorLabel("auth_expired") === "sesja wygasła");
+  assert(errorLabel("source_offline") === "źródło offline");
 });
 
 Deno.test("GreenPT balance requires a numeric response header and preserves zero", () => {
@@ -370,10 +669,14 @@ Deno.test("both GreenPT accounts are collected, cached and rendered independentl
       JSON.stringify({ greenpt: { key: "original-test-key" } }),
     );
     const ids = await meterIds(home, "additional-test-key");
-    assert(ids.length === 4 && ids.includes("greenpt_opencode"));
-    assert(!ids.includes("grok"));
-    assert((await meterIds(home)).length === 3);
-    assert((await meterIds(home, " original-test-key ")).length === 3);
+    assert(ids.length === 5 && ids.includes("greenpt_opencode"));
+    assert(ids.includes("grok"));
+    assert((await meterIds(home)).length === 4);
+    assert((await meterIds(home, " original-test-key ")).length === 4);
+    assert(
+      (await meterIds(home, "additional-test-key", { pushed: true })).join() ===
+        "claude,codex,grok,openrouter,greenpt_opencode,greenpt",
+    );
     let failOriginal = false;
     const keys: string[] = [];
     globalThis.fetch = (_input, init) => {
@@ -418,8 +721,8 @@ Deno.test("both GreenPT accounts are collected, cached and rendered independentl
     );
     const json = JSON.stringify(cache.snapshot());
     assert(
-      !json.includes("test-key") && !json.includes('"grok"') &&
-        render(cache.meters).cards.length === 4,
+      !json.includes("test-key") && json.includes('"grok"') &&
+        render(cache.meters).cards.length === 5,
     );
     failOriginal = true;
     await cache.refresh();
@@ -430,7 +733,7 @@ Deno.test("both GreenPT accounts are collected, cached and rendered independentl
     );
     assert(!cache.meters.find((m) => m.id === "greenpt")!.stale);
     await Deno.remove(`${home}/.local/share/opencode/auth.json`);
-    assert((await meterIds(home, "additional-test-key")).length === 4);
+    assert((await meterIds(home, "additional-test-key")).length === 5);
   } finally {
     globalThis.fetch = originalFetch;
     await Deno.remove(home, { recursive: true });
