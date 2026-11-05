@@ -80,7 +80,10 @@ if (import.meta.main) {
   if (typeof config.url !== "string" || typeof config.token !== "string") {
     throw new Error("push.json requires url and token");
   }
-  const reading = await readClaude(`${claudeDir}/.credentials.json`);
+  // The installer passes the resolved path so systemd needs no extra env.
+  const reading = await readClaude(
+    Deno.args[1] ?? `${claudeDir}/.credentials.json`,
+  );
   const r = await fetch(pushUrl(config.url), {
     method: "POST",
     headers: {

@@ -47,6 +47,33 @@ const baseHeaders = {
   "X-Content-Type-Options": "nosniff",
 };
 const pushLimit = 16384;
+// Reads at most `limit` bytes; returns null and stops reading when exceeded.
+async function readLimited(
+  req: Request,
+  limit: number,
+): Promise<Uint8Array | null> {
+  if (!req.body) return new Uint8Array();
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > limit) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return bytes;
+}
 async function pushed(
   req: Request,
   cache: Cache,
@@ -66,8 +93,8 @@ async function pushed(
   if (declared > pushLimit) return reply(413);
   let body: unknown;
   try {
-    const bytes = new Uint8Array(await req.arrayBuffer());
-    if (bytes.length > pushLimit) return reply(413);
+    const bytes = await readLimited(req, pushLimit);
+    if (!bytes) return reply(413);
     body = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
   } catch {
     return reply(400);

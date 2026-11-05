@@ -59,14 +59,20 @@ export class Cache {
   }
   private async run() {
     this.lastAttempt = new Date().toISOString();
-    this.meters = await Promise.all(this.meters.map(async (old) => {
-      if (pushedMeterIds.includes(old.id)) return old;
-      try {
-        return await this.fetcher(old.id);
-      } catch (e) {
-        return { ...old, stale: true, error: safeError(e) };
-      }
-    }));
+    const polled = await Promise.all(
+      this.meters
+        .filter((m) => !pushedMeterIds.includes(m.id))
+        .map(async (old): Promise<Meter> => {
+          try {
+            return await this.fetcher(old.id);
+          } catch (e) {
+            return { ...old, stale: true, error: safeError(e) };
+          }
+        }),
+    );
+    // Merge into the current list so pushes received during the poll survive.
+    const byId = new Map(polled.map((m) => [m.id, m]));
+    this.meters = this.meters.map((m) => byId.get(m.id) ?? m);
   }
   private current(meter: Meter): Meter {
     if (!pushedMeterIds.includes(meter.id)) return meter;

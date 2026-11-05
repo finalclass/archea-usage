@@ -45,7 +45,7 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=${Deno.execPath()} run --no-config --allow-env=HOME,CLAUDE_CONFIG_DIR --allow-read=${claudeDir}/.credentials.json,${config} --allow-net=api.anthropic.com:443,${api} ${dest}/rog/claude-push.ts ${config}
+ExecStart=${Deno.execPath()} run --no-config --allow-env=HOME,CLAUDE_CONFIG_DIR --allow-read=${claudeDir}/.credentials.json,${config} --allow-net=api.anthropic.com:443,${api} ${dest}/rog/claude-push.ts ${config} ${claudeDir}/.credentials.json
 NoNewPrivileges=true
 PrivateTmp=true
 `,

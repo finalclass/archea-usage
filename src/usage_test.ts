@@ -304,6 +304,55 @@ Deno.test("Claude push needs its own token and becomes stale when ROG stops", as
     await Deno.remove(home, { recursive: true });
   }
 });
+Deno.test("a push during a provider poll is not overwritten", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => release = resolve);
+  const cache = new Cache(
+    async (id) => {
+      await gate;
+      return { ...empty(id), stale: false };
+    },
+    300,
+    ["claude", "codex"],
+  );
+  const polling = cache.refresh();
+  cache.accept("claude", {
+    windows: [{ label: "5h", usedPercent: 25, resetsAt: null }],
+  });
+  release();
+  await polling;
+  const claude = cache.snapshot().meters[0];
+  assert(claude.windows[0]?.usedPercent === 25 && !claude.stale);
+  assert(!cache.snapshot().meters[1].stale);
+});
+Deno.test("an oversized chunked push is rejected without reading it all", async () => {
+  const cache = new Cache(() => Promise.resolve(empty("x")), 300, ["claude"]);
+  const api = handler(
+    cache,
+    {
+      username: "usage",
+      passwordHash: await hash("test-password"),
+    },
+    "/nonexistent",
+    { tokenHash: await hash("push-token") },
+  );
+  let sent = 0;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (sent >= 1024 * 1024) return controller.close();
+      sent += 4096;
+      controller.enqueue(new Uint8Array(4096));
+    },
+  });
+  const r = await api(
+    new Request("https://example.com/v1/push/claude", {
+      method: "POST",
+      headers: { Authorization: "Bearer push-token" },
+      body,
+    }),
+  );
+  assert(r.status === 413 && sent < 64 * 1024, `read ${sent} bytes`);
+});
 Deno.test("ROG collector reads Claude limits without exposing the token", async () => {
   const dir = await Deno.makeTempDir();
   const path = `${dir}/.credentials.json`;
