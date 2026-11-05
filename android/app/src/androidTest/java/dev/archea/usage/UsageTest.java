@@ -55,7 +55,7 @@ public class UsageTest extends InstrumentationTestCase {
             long idleDeadline=android.os.SystemClock.elapsedRealtime()+3000;
             while(RefreshJob.isRefreshing() && android.os.SystemClock.elapsedRealtime()<idleDeadline)Thread.sleep(20);
             assertFalse("Initial refresh stopped",RefreshJob.isRefreshing());
-            String snapshot="{\"meters\":["+meter("Grok",80)+","+meter("Codex",100)+","+greenpt()+","+secondGreenpt()+","+balance()+"]}";
+            String snapshot="{\"meters\":["+claude()+","+meter("Grok",80)+","+meter("Codex",100)+","+balance()+","+greenpt()+","+secondGreenpt()+"]}";
             context.getSharedPreferences("usage",Context.MODE_PRIVATE).edit().putString("snapshot",snapshot).remove("error").commit();
             final AppWidgetHostView[] view=new AppWidgetHostView[1];
             getInstrumentation().runOnMainSync(()->{
@@ -71,56 +71,71 @@ public class UsageTest extends InstrumentationTestCase {
             ViewGroup rowOne=showRow(view[0],0);
             getInstrumentation().runOnMainSync(()->{
                 ViewGroup row=rowOne;
-                assertEquals("All five providers remain accessible",3,((android.widget.ListView)view[0].findViewById(R.id.cards)).getCount());
+                assertEquals("All six providers remain accessible",3,((android.widget.ListView)view[0].findViewById(R.id.cards)).getCount());
                 assertEquals(2,row.getChildCount());
-                TextView first=row.getChildAt(0).findViewById(R.id.provider_value);
-                TextView second=row.getChildAt(1).findViewById(R.id.provider_value);
+                android.view.View claude=row.getChildAt(0);
+                assertEquals("Claude",((TextView)claude.findViewById(R.id.provider_name)).getText().toString());
+                assertEquals("9%",((TextView)claude.findViewById(R.id.provider_value)).getText().toString());
+                ViewGroup claudeWindows=claude.findViewById(R.id.windows);
+                assertEquals(2,claudeWindows.getChildCount());
+                TextView fiveHours=claudeWindows.getChildAt(0).findViewById(R.id.window_label);
+                assertTrue(fiveHours.getText().toString(),fiveHours.getText().toString().matches("5 h · do \\S+ [0-9]{2}:[0-9]{2}"));
+                assertEquals("9%",((TextView)claudeWindows.getChildAt(0).findViewById(R.id.window_percent)).getText().toString());
+                assertEquals("3%",((TextView)claudeWindows.getChildAt(1).findViewById(R.id.window_percent)).getText().toString());
+                assertEquals("Fresh cards hide their status line",android.view.View.GONE,claude.findViewById(R.id.provider_updated).getVisibility());
+                assertUnclipped(fiveHours);
+                android.view.View grok=row.getChildAt(1);
+                TextView first=grok.findViewById(R.id.provider_value);
                 assertEquals("80%",first.getText().toString());
-                assertEquals("100%",second.getText().toString());
                 assertEquals(android.graphics.Color.parseColor("#ffd166"),first.getCurrentTextColor());
-                assertEquals(android.graphics.Color.parseColor("#ff7078"),second.getCurrentTextColor());
-                ViewGroup windows=row.getChildAt(1).findViewById(R.id.windows);
-                TextView reset=windows.getChildAt(0).findViewById(R.id.window_reset);
-                assertEquals("Tydzień",((TextView)windows.getChildAt(0).findViewById(R.id.window_label)).getText().toString());
-                assertTrue(reset.getText().toString().matches("reset · [^,]+, [0-9]{2}:[0-9]{2}"));
-                assertEquals(android.graphics.Color.parseColor("#ffd166"),barPixel(row.getChildAt(0),0.05f));
-                assertEquals(UsageWidget.TRACK,barPixel(row.getChildAt(0),0.92f));
-                assertEquals(android.graphics.Color.parseColor("#ff7078"),barPixel(row.getChildAt(1),0.92f));
-                assertUnclipped(row.getChildAt(1).findViewById(R.id.provider_name));
-                assertUnclipped(reset);
+                ViewGroup windows=grok.findViewById(R.id.windows);
+                TextView label=windows.getChildAt(0).findViewById(R.id.window_label);
+                assertTrue(label.getText().toString(),label.getText().toString().matches("Tydzień · do \\S+ [0-9]{2}:[0-9]{2}"));
+                assertEquals("Single limits rely on the header",android.view.View.GONE,windows.getChildAt(0).findViewById(R.id.window_percent).getVisibility());
+                assertEquals(android.graphics.Color.parseColor("#ffd166"),barPixel(grok,0.05f));
+                assertEquals(UsageWidget.TRACK,barPixel(grok,0.92f));
+                assertUnclipped(grok.findViewById(R.id.provider_name));
+                assertUnclipped(label);
             });
             ViewGroup rowTwo=showRow(view[0],1);
             getInstrumentation().runOnMainSync(()->{
-                android.view.View green=rowTwo.getChildAt(0);
+                android.view.View codex=rowTwo.getChildAt(0);
+                TextView value=codex.findViewById(R.id.provider_value);
+                assertEquals("100%",value.getText().toString());
+                assertEquals(android.graphics.Color.parseColor("#ff7078"),value.getCurrentTextColor());
+                assertEquals(android.graphics.Color.parseColor("#ff7078"),barPixel(codex,0.92f));
+                android.view.View router=rowTwo.getChildAt(1);
+                assertEquals(android.view.View.GONE,router.findViewById(R.id.provider_value).getVisibility());
+                assertEquals(android.view.View.GONE,router.findViewById(R.id.windows).getVisibility());
+                assertEquals(android.view.View.VISIBLE,router.findViewById(R.id.balance_block).getVisibility());
+                assertEquals("0.41",((TextView)router.findViewById(R.id.balance_amount)).getText().toString());
+                assertEquals("USD",((TextView)router.findViewById(R.id.balance_currency)).getText().toString());
+                assertUnclipped(router.findViewById(R.id.balance_amount));
+                assertUnclipped(router.findViewById(R.id.balance_currency));
+            });
+            ViewGroup rowThree=showRow(view[0],2);
+            getInstrumentation().runOnMainSync(()->{
+                assertEquals(2,rowThree.getChildCount());
+                android.view.View green=rowThree.getChildAt(0);
                 assertEquals(android.view.View.GONE,green.findViewById(R.id.provider_value).getVisibility());
                 assertEquals(android.view.View.GONE,green.findViewById(R.id.windows).getVisibility());
                 assertEquals(android.view.View.VISIBLE,green.findViewById(R.id.balance_block).getVisibility());
                 assertEquals("GreenPT · moje",((TextView)green.findViewById(R.id.provider_name)).getText().toString());
                 assertEquals("0.95",((TextView)green.findViewById(R.id.balance_amount)).getText().toString());
                 assertEquals("EUR",((TextView)green.findViewById(R.id.balance_currency)).getText().toString());
-                assertTrue(((TextView)green.findViewById(R.id.spend_line)).getText().toString().contains("0.00001815 EUR"));
-                assertTrue(((TextView)green.findViewById(R.id.spend_models)).getText().toString().contains("glm-5.3-flash"));
-                assertTrue(((TextView)green.findViewById(R.id.provider_updated)).getText().toString().contains("nieaktualne · brak środków · stan "));
+                assertTrue(((TextView)green.findViewById(R.id.spend_line)).getText().toString().contains("wydane 0.00001815 EUR"));
+                TextView status=green.findViewById(R.id.provider_updated);
+                assertEquals(android.view.View.VISIBLE,status.getVisibility());
+                assertTrue(status.getText().toString().contains("nieaktualne · brak środków · stan "));
                 assertUnclipped(green.findViewById(R.id.balance_amount));
                 assertUnclipped(green.findViewById(R.id.balance_currency));
                 assertUnclipped(green.findViewById(R.id.provider_name));
-                assertEquals("GreenPT · dodatkowe",((TextView)rowTwo.getChildAt(1).findViewById(R.id.provider_name)).getText().toString());
-                assertEquals("10.00",((TextView)rowTwo.getChildAt(1).findViewById(R.id.balance_amount)).getText().toString());
-                assertUnclipped(rowTwo.getChildAt(1).findViewById(R.id.balance_amount));
-                assertUnclipped(rowTwo.getChildAt(1).findViewById(R.id.balance_currency));
-                assertUnclipped(rowTwo.getChildAt(1).findViewById(R.id.provider_name));
-            });
-            ViewGroup rowThree=showRow(view[0],2);
-            getInstrumentation().runOnMainSync(()->{
-                assertEquals(1,rowThree.getChildCount());
-                android.view.View last=rowThree.getChildAt(0);
-                TextView amount=last.findViewById(R.id.balance_amount);
-                TextView currency=last.findViewById(R.id.balance_currency);
-                assertEquals(android.view.View.GONE,last.findViewById(R.id.provider_value).getVisibility());
-                assertEquals(android.view.View.GONE,last.findViewById(R.id.windows).getVisibility());
-                assertEquals(android.view.View.VISIBLE,last.findViewById(R.id.balance_block).getVisibility());
-                assertEquals("0.41",amount.getText().toString());
-                assertEquals("USD",currency.getText().toString());
+                android.view.View other=rowThree.getChildAt(1);
+                assertEquals("GreenPT · dodatkowe",((TextView)other.findViewById(R.id.provider_name)).getText().toString());
+                assertEquals("10.00",((TextView)other.findViewById(R.id.balance_amount)).getText().toString());
+                assertUnclipped(other.findViewById(R.id.balance_amount));
+                assertUnclipped(other.findViewById(R.id.balance_currency));
+                assertUnclipped(other.findViewById(R.id.provider_name));
                 TextView readings=view[0].findViewById(R.id.readings);
                 assertTrue(readings.getText().toString().startsWith("Najwyższe zużycie: 100%"));
                 assertEquals(android.graphics.Color.parseColor("#ff7078"),readings.getCurrentTextColor());
@@ -139,7 +154,7 @@ public class UsageTest extends InstrumentationTestCase {
                 assertTrue("Refresh touch target is at least 48dp",refresh.getHeight()>=Math.round(48*context.getResources().getDisplayMetrics().density));
                 assertTrue("Refresh is linked",refresh.hasOnClickListeners());
             });
-            ViewGroup visibleBalances=showRow(view[0],1);
+            ViewGroup visibleBalances=showRow(view[0],2);
             getInstrumentation().runOnMainSync(()->{
                 assertEquals("Recycled balances do not duplicate cards",2,visibleBalances.getChildCount());
                 assertUnclipped(visibleBalances.getChildAt(0).findViewById(R.id.balance_amount));
@@ -177,7 +192,7 @@ public class UsageTest extends InstrumentationTestCase {
                 int index=position-list.getFirstVisiblePosition();
                 if(index>=0 && index<list.getChildCount()) {
                     ViewGroup row=list.getChildAt(index).findViewById(R.id.card_row);
-                    String expected=position==0?"Grok":position==1?"GreenPT · moje":"OpenRouter";
+                    String expected=position==0?"Claude":position==1?"Codex":"GreenPT · moje";
                     if(row!=null && row.getChildCount()>0) {
                         TextView label=row.getChildAt(0).findViewById(R.id.provider_name);
                         if(label!=null && expected.equals(label.getText().toString()))found[0]=row;
@@ -225,6 +240,9 @@ public class UsageTest extends InstrumentationTestCase {
     static String meter(String name,int percent) {
         return "{\"label\":\""+name+"\",\"windows\":[{\"label\":\"weekly\",\"usedPercent\":"+percent+",\"resetsAt\":\"2026-10-07T07:51:00Z\"}],\"balance\":null,\"updatedAt\":\"2026-10-02T00:00:00Z\",\"stale\":false}";
     }
+    static String claude() {
+        return "{\"label\":\"Claude\",\"windows\":[{\"label\":\"5h\",\"usedPercent\":9,\"resetsAt\":\"2026-11-05T12:50:00Z\"},{\"label\":\"weekly\",\"usedPercent\":3,\"resetsAt\":\"2026-11-09T23:00:00Z\"}],\"balance\":null,\"updatedAt\":\"2026-11-05T10:00:00Z\",\"stale\":false,\"error\":null}";
+    }
     static String balance() {
         return "{\"label\":\"OpenRouter\",\"windows\":[],\"balance\":{\"amount\":0.41,\"currency\":\"USD\"},\"updatedAt\":\"2026-10-02T00:00:00Z\",\"stale\":false}";
     }
@@ -251,6 +269,9 @@ public class UsageTest extends InstrumentationTestCase {
         try {
             java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"));
             assertEquals("środa, 07:51",Api.resetLabel(java.time.Instant.parse("2026-10-07T07:51:00Z")));
+            assertTrue(Api.shortResetLabel(java.time.Instant.parse("2026-10-07T07:51:00Z")),Api.shortResetLabel(java.time.Instant.parse("2026-10-07T07:51:00Z")).matches("\\S+ 07:51"));
+            assertEquals("sesja wygasła",Api.errorLabel("auth_expired"));
+            assertEquals("źródło offline",Api.errorLabel("source_offline"));
             org.json.JSONArray meters=new org.json.JSONObject("{\"meters\":[{\"label\":\"Grok\",\"windows\":[{\"label\":\"subscription\",\"usedPercent\":10.24,\"resetsAt\":null}],\"balance\":null,\"updatedAt\":\"2026-10-04T05:04:00Z\",\"stale\":false}]}").getJSONArray("meters");
             assertEquals("Najwyższe zużycie: 10% · stan 05:04",Api.summary(meters));
             assertEquals(0,Api.worstLevel(new org.json.JSONArray("["+balance()+"]")));

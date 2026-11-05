@@ -56,23 +56,24 @@ Item {
         property var meter: ({})
         readonly property bool hasWindows: meter && meter.windows && meter.windows.length > 0
         readonly property bool hasBalance: meter && meter.balance
+        readonly property bool hasAlert: meter && meter.alert === true
         readonly property string meterLevel: (meter && meter.level) ? meter.level : "normal"
-        radius: 14
+        radius: 10
         antialiasing: true
         color: root.surface(meterLevel, cardArea.containsMouse)
         border.color: root.stroke(meterLevel)
         border.width: 1
-        implicitHeight: body.implicitHeight + foot.implicitHeight + 38
+        implicitHeight: body.implicitHeight + 18
 
         Column {
             id: body
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
-            anchors.leftMargin: 16
-            anchors.rightMargin: 16
-            anchors.topMargin: 14
-            spacing: 10
+            anchors.leftMargin: 10
+            anchors.rightMargin: 10
+            anchors.topMargin: 8
+            spacing: 5
 
             Item {
                 width: parent.width
@@ -81,11 +82,11 @@ Item {
                     id: nameText
                     anchors.left: parent.left
                     anchors.right: peakText.left
-                    anchors.rightMargin: 8
+                    anchors.rightMargin: 6
                     anchors.verticalCenter: parent.verticalCenter
                     text: card.meter.label || ""
                     color: root.ink
-                    font.pixelSize: 16
+                    font.pixelSize: 13
                     font.bold: true
                     elide: Text.ElideRight
                 }
@@ -95,7 +96,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     text: card.hasWindows ? (card.meter.peakLabel || "") : ""
                     color: root.accent(card.meterLevel)
-                    font.pixelSize: 22
+                    font.pixelSize: 14
                     font.bold: true
                 }
             }
@@ -105,110 +106,88 @@ Item {
                 Column {
                     required property var modelData
                     width: body.width
-                    spacing: 5
+                    spacing: 3
                     Item {
                         width: parent.width
-                        height: windowName.implicitHeight
+                        height: windowLine.implicitHeight
                         Text {
-                            id: windowName
-                            text: modelData.label
-                            color: root.muted
-                            font.pixelSize: 12
+                            id: windowLine
+                            anchors.left: parent.left
+                            anchors.right: windowPercent.left
+                            anchors.rightMargin: 6
+                            text: modelData.line || modelData.label
+                            color: modelData.reset ? "#d5dee6" : root.muted
+                            font.pixelSize: 11
+                            elide: Text.ElideRight
                         }
                         Text {
+                            id: windowPercent
                             anchors.right: parent.right
-                            visible: card.meter.windows.length > 1
-                            text: modelData.percentLabel
+                            text: card.meter.windows.length > 1 ? modelData.percentLabel : ""
                             color: root.accent(modelData.level)
-                            font.pixelSize: 12
+                            font.pixelSize: 11
                             font.bold: true
                         }
                     }
                     Rectangle {
                         id: track
                         width: parent.width
-                        height: 8
-                        radius: 4
+                        height: 5
+                        radius: 2.5
                         color: "#101820"
                         Rectangle {
                             readonly property real ratio: Math.max(0, Math.min(1, (modelData.percent || 0) / 100))
-                            width: ratio === 0 ? 0 : Math.min(track.width, Math.max(4, track.width * ratio))
+                            width: ratio === 0 ? 0 : Math.min(track.width, Math.max(3, track.width * ratio))
                             height: parent.height
-                            radius: 4
+                            radius: 2.5
                             color: root.accent(modelData.level)
                         }
-                    }
-                    Text {
-                        width: parent.width
-                        text: modelData.reset ? "reset · " + modelData.reset : "brak daty resetu"
-                        color: modelData.reset ? "#d5dee6" : root.faint
-                        font.pixelSize: 12
-                        elide: Text.ElideRight
                     }
                 }
             }
 
-            Column {
+            Row {
                 visible: card.hasBalance
+                spacing: 5
+                Text {
+                    id: amountText
+                    text: card.meter.balance ? card.meter.balance.amount : ""
+                    color: root.ink
+                    font.pixelSize: 18
+                    font.bold: true
+                }
+                Text {
+                    text: card.meter.balance ? card.meter.balance.currency + " pozostało" : ""
+                    color: root.muted
+                    font.pixelSize: 11
+                    anchors.baseline: amountText.baseline
+                }
+            }
+            Text {
+                visible: card.meter && card.meter.spend
                 width: parent.width
-                spacing: 2
-                Row {
-                    spacing: 8
-                    Text {
-                        id: amountText
-                        text: card.meter.balance ? card.meter.balance.amount : ""
-                        color: root.ink
-                        font.pixelSize: 28
-                        font.bold: true
-                    }
-                    Text {
-                        text: card.meter.balance ? card.meter.balance.currency : ""
-                        color: root.muted
-                        font.pixelSize: 13
-                        font.bold: true
-                        anchors.baseline: amountText.baseline
-                    }
-                }
-                Text {
-                    text: "pozostało"
-                    color: root.muted
-                    font.pixelSize: 12
-                }
-                Text {
-                    visible: card.meter && card.meter.spend
-                    width: parent.width
-                    wrapMode: Text.WordWrap
-                    text: card.meter && card.meter.spend ? card.meter.spend.line : ""
-                    color: root.muted
-                    font.pixelSize: 12
-                }
-                Text {
-                    visible: card.meter && card.meter.spend && card.meter.spend.models
-                    width: parent.width
-                    wrapMode: Text.WordWrap
-                    text: card.meter && card.meter.spend ? card.meter.spend.models : ""
-                    color: root.faint
-                    font.pixelSize: 12
-                }
+                elide: Text.ElideRight
+                text: card.meter && card.meter.spend ? "wydane " + card.meter.spend.line : ""
+                color: root.faint
+                font.pixelSize: 11
             }
 
             Text {
                 visible: !card.hasWindows && !card.hasBalance
                 text: "Brak danych"
                 color: root.muted
-                font.pixelSize: 13
+                font.pixelSize: 11
             }
-        }
 
-        Text {
-            id: foot
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            anchors.rightMargin: 16
-            anchors.bottomMargin: 12
-            text: (card.meter && card.meter.status) ? card.meter.status : (((card.meter && card.meter.stale) ? "nieaktualne · " : "") + "stan " + ((card.meter && card.meter.updatedTime) || "—"))
-            color: (card.meter && (card.meter.stale || card.meter.errorLabel)) ? root.accent("warning") : root.faint
-            font.pixelSize: 11
+            Text {
+                visible: card.hasAlert
+                width: parent.width
+                horizontalAlignment: Text.AlignRight
+                elide: Text.ElideLeft
+                text: (card.meter && card.meter.status) ? card.meter.status : ""
+                color: root.accent("warning")
+                font.pixelSize: 10
+            }
         }
 
         MouseArea {
@@ -318,7 +297,7 @@ Item {
         id: popup
         visible: root.popupOpen
         color: "transparent"
-        implicitWidth: 468
+        implicitWidth: 420
         implicitHeight: shell.implicitHeight
         anchor.item: root
         anchor.rect.x: root.width - implicitWidth
@@ -327,10 +306,10 @@ Item {
 
         Rectangle {
             id: shell
-            width: 468
+            width: 420
             height: implicitHeight
-            implicitHeight: panelColumn.implicitHeight + 32
-            radius: 18
+            implicitHeight: panelColumn.implicitHeight + 24
+            radius: 14
             color: "#101820"
             border.color: "#2a3c4e"
             border.width: 1
@@ -338,25 +317,25 @@ Item {
 
             Column {
                 id: panelColumn
-                x: 18
-                y: 16
-                width: parent.width - 36
-                spacing: 14
+                x: 12
+                y: 12
+                width: parent.width - 24
+                spacing: 8
 
                 Item {
                     width: parent.width
-                    height: 28
+                    height: 24
                     Text {
                         text: "Zużycie AI"
                         color: root.ink
-                        font.pixelSize: 18
+                        font.pixelSize: 15
                         font.bold: true
                         anchors.verticalCenter: parent.verticalCenter
                     }
                     Rectangle {
-                        width: 28
-                        height: 28
-                        radius: 14
+                        width: 24
+                        height: 24
+                        radius: 12
                         anchors.right: parent.right
                         color: closeArea.containsMouse ? "#243444" : "transparent"
                         Text {
@@ -381,7 +360,7 @@ Item {
                     text: root.summary
                     wrapMode: Text.Wrap
                     color: root.severity === "normal" ? root.muted : root.accent(root.severity)
-                    font.pixelSize: 12
+                    font.pixelSize: 11
                 }
 
                 Rectangle {
@@ -393,14 +372,14 @@ Item {
                 Column {
                     id: pairs
                     width: parent.width
-                    spacing: 12
+                    spacing: 6
                     visible: root.cards.length > 0
                     Repeater {
                         model: root.rowCount
                         Row {
                             required property int index
                             width: pairs.width
-                            spacing: 12
+                            spacing: 6
                             readonly property bool hasRight: index * 2 + 1 < root.cards.length
                             readonly property int cardWidth: Math.max(0, hasRight ? Math.floor((width - spacing) / 2) : width)
                             UsageCard {

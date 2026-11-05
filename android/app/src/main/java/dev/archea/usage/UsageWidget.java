@@ -22,8 +22,6 @@ public class UsageWidget extends AppWidgetProvider {
     static final int WARNING=Color.parseColor("#ffd166");
     static final int CRITICAL=Color.parseColor("#ff7078");
     static final int MUTED=Color.parseColor("#8fa1b3");
-    static final int FAINT=Color.parseColor("#6e8294");
-    static final int RESET=Color.parseColor("#d5dee6");
     static final int TRACK=0xFF101820;
     static Intent websiteIntent() { return new Intent(Intent.ACTION_VIEW,Uri.parse("https://szymon.archea.dev")); }
     static int levelColor(int level) { return level==2 ? CRITICAL : level==1 ? WARNING : ACCENT; }
@@ -51,9 +49,10 @@ public class UsageWidget extends AppWidgetProvider {
         int widthDp=options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH,0);
         if(widthDp<=0) widthDp=250;
         int cols=Math.max(1,columns);
-        int barDp=Math.max(48,(widthDp-28-8*cols)/cols-28);
+        // Widget padding 2×10dp, card margin 2×3dp and card padding 2×8dp.
+        int barDp=Math.max(48,(widthDp-20-6*cols)/cols-16);
         int barWidth=Math.min(800,Math.max(48,Math.round(barDp*density)));
-        int barHeight=Math.max(8,Math.round(8*density));
+        int barHeight=Math.max(5,Math.round(5*density));
         return new int[]{barWidth,barHeight};
     }
     static RemoteViews card(Context c,JSONObject meter,int barWidth,int barHeight) throws Exception {
@@ -75,20 +74,13 @@ public class UsageWidget extends AppWidgetProvider {
             double percent=window.getDouble("usedPercent");
             int windowLevel=Api.percentLevel(percent);
             RemoteViews row=new RemoteViews(c.getPackageName(),R.layout.widget_window);
-            row.setTextViewText(R.id.window_label,Api.windowLabel(window.getString("label")));
+            row.setTextViewText(R.id.window_label,Api.windowLine(window));
             if(windows.length()>1) {
                 row.setViewVisibility(R.id.window_percent,View.VISIBLE);
                 row.setTextViewText(R.id.window_percent,Api.percentLabel(percent));
                 row.setTextColor(R.id.window_percent,levelColor(windowLevel));
             }
             row.setImageViewBitmap(R.id.meter,meterBitmap(barWidth,barHeight,levelColor(windowLevel),percent));
-            if(window.isNull("resetsAt")) {
-                row.setTextViewText(R.id.window_reset,"brak daty resetu");
-                row.setTextColor(R.id.window_reset,FAINT);
-            } else {
-                row.setTextViewText(R.id.window_reset,"reset · "+Api.resetLabel(Instant.parse(window.getString("resetsAt"))));
-                row.setTextColor(R.id.window_reset,RESET);
-            }
             card.addView(R.id.windows,row);
         }
         if(windows.length()==0) card.setViewVisibility(R.id.windows,View.GONE);
@@ -98,36 +90,20 @@ public class UsageWidget extends AppWidgetProvider {
             card.setViewVisibility(R.id.balance_block,View.VISIBLE);
             card.setTextViewText(R.id.balance_amount,Api.money(balance.getDouble("amount")));
             card.setTextViewText(R.id.balance_currency,balance.getString("currency"));
-            if(meter.isNull("spend")) {
-                card.setViewVisibility(R.id.spend_line,View.GONE);
-                card.setViewVisibility(R.id.spend_models,View.GONE);
-            } else {
+            if(meter.isNull("spend")) card.setViewVisibility(R.id.spend_line,View.GONE);
+            else {
                 JSONObject spend=meter.getJSONObject("spend");
-                String line=Api.money(spend.getDouble("amount"))+" "+spend.getString("currency");
+                String line="wydane "+Api.money(spend.getDouble("amount"))+" "+spend.getString("currency");
                 if(!spend.isNull("from") && !spend.isNull("until")) line+=" · "+Api.periodLabel(Instant.parse(spend.getString("from")),Instant.parse(spend.getString("until")));
                 card.setViewVisibility(R.id.spend_line,View.VISIBLE);
                 card.setTextViewText(R.id.spend_line,line);
-                JSONArray models=spend.optJSONArray("models");
-                if(models==null || models.length()==0) card.setViewVisibility(R.id.spend_models,View.GONE);
-                else {
-                    StringBuilder text=new StringBuilder();
-                    int shown=Math.min(4,models.length());
-                    for(int i=0;i<shown;i++) {
-                        JSONObject model=models.getJSONObject(i);
-                        if(i>0) text.append('\n');
-                        text.append(model.getString("model")).append(" · ").append(Api.money(model.getDouble("amount"))).append(" EUR");
-                    }
-                    if(models.length()>shown) text.append("\n+").append(models.length()-shown);
-                    card.setViewVisibility(R.id.spend_models,View.VISIBLE);
-                    card.setTextViewText(R.id.spend_models,text.toString());
-                }
             }
         }
         card.setViewVisibility(R.id.provider_empty,windows.length()==0 && meter.isNull("balance") ? View.VISIBLE : View.GONE);
-        boolean stale=meter.optBoolean("stale");
-        boolean failed=!meter.isNull("error");
-        card.setTextViewText(R.id.provider_updated,Api.statusLine(meter));
-        card.setTextColor(R.id.provider_updated,stale||failed?WARNING:FAINT);
+        // Compact cards show their status only when the reading needs attention.
+        boolean attention=Api.needsAttention(meter);
+        card.setViewVisibility(R.id.provider_updated,attention?View.VISIBLE:View.GONE);
+        if(attention) card.setTextViewText(R.id.provider_updated,Api.statusLine(meter));
         return card;
     }
     static void draw(Context c) {

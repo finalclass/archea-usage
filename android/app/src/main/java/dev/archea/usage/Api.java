@@ -36,6 +36,18 @@ final class Api {
     static String resetLabel(Instant date) {
         return DateTimeFormatter.ofPattern("EEEE, HH:mm",java.util.Locale.forLanguageTag("pl-PL")).withZone(ZoneId.systemDefault()).format(date);
     }
+    // Compact card form, for example "czw. 13:50".
+    static String shortResetLabel(Instant date) {
+        return DateTimeFormatter.ofPattern("EEE HH:mm",java.util.Locale.forLanguageTag("pl-PL")).withZone(ZoneId.systemDefault()).format(date);
+    }
+    static String windowLine(JSONObject window) throws Exception {
+        String line=windowLabel(window.getString("label"));
+        if(!window.isNull("resetsAt")) line+=" · do "+shortResetLabel(Instant.parse(window.getString("resetsAt")));
+        return line;
+    }
+    static boolean needsAttention(JSONObject meter) {
+        return meter.optBoolean("stale") || !meter.isNull("error");
+    }
     static int percentLevel(double percent) { return percent>=100 ? 2 : percent>=80 ? 1 : 0; }
     static int level(JSONObject meter) throws Exception {
         JSONArray windows=meter.getJSONArray("windows"); double peak=0;
@@ -78,6 +90,8 @@ final class Api {
         if ("provider_unavailable".equals(error)) return "awaria sieci";
         if ("login_required".equals(error)) return "brak logowania";
         if ("credentials_missing".equals(error)) return "brak klucza";
+        if ("auth_expired".equals(error)) return "sesja wygasła";
+        if ("source_offline".equals(error)) return "źródło offline";
         if (error.matches("provider_http_\\d{3}")) return "błąd dostawcy";
         return "błąd pomiaru";
     }

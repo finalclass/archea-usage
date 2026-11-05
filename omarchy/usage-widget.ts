@@ -14,6 +14,15 @@ export function resetLabel(date: string): string {
     hourCycle: "h23",
   }).format(new Date(date));
 }
+// Compact form for cards, for example "śr. 07:51".
+export function shortResetLabel(date: string): string {
+  return new Intl.DateTimeFormat("pl-PL", {
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date(date)).replace(",", "");
+}
 export function windowLabel(label: string): string {
   return label === "weekly"
     ? "Tydzień"
@@ -47,6 +56,8 @@ export function errorLabel(error: string | null): string | null {
   if (error === "provider_unavailable") return "awaria sieci";
   if (error === "login_required") return "brak logowania";
   if (error === "credentials_missing") return "brak klucza";
+  if (error === "auth_expired") return "sesja wygasła";
+  if (error === "source_offline") return "źródło offline";
   if (error && /^provider_http_\d{3}$/.test(error)) return "błąd dostawcy";
   if (error) return "błąd pomiaru";
   return null;
@@ -116,6 +127,8 @@ export function render(meters: Meter[], _now = Date.now()) {
       errorLabel: problem,
       level: level(peak),
       stale: m.stale,
+      // Compact cards show the status line only when something needs attention.
+      alert: m.stale || problem !== null,
       peakLabel: peak === null ? null : percentLabel(peak),
       balance: m.balance
         ? {
@@ -129,7 +142,9 @@ export function render(meters: Meter[], _now = Date.now()) {
         percent: w.usedPercent,
         percentLabel: percentLabel(w.usedPercent),
         level: level(w.usedPercent),
-        reset: w.resetsAt ? resetLabel(w.resetsAt) : null,
+        reset: w.resetsAt ? shortResetLabel(w.resetsAt) : null,
+        line: windowLabel(w.label) +
+          (w.resetsAt ? " · do " + shortResetLabel(w.resetsAt) : ""),
       })),
     };
   });
