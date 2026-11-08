@@ -173,7 +173,9 @@ public class UsageTest extends InstrumentationTestCase {
             waitForRefresh(view[0],false,10000);
             assertEquals("A failed refresh retains the cards",snapshot,context.getSharedPreferences("usage",Context.MODE_PRIVATE).getString("snapshot",""));
             getInstrumentation().runOnMainSync(()->{
-                assertTrue(((TextView)view[0].findViewById(R.id.readings)).getText().toString().startsWith("Nie udało się odświeżyć."));
+                String failure=((TextView)view[0].findViewById(R.id.readings)).getText().toString();
+                assertTrue(failure,failure.startsWith("Nie udało się odświeżyć."));
+                assertTrue("A failed refresh names its cause: "+failure,failure.endsWith("(HTTPS required)"));
                 assertEquals("Odśwież",((TextView)view[0].findViewById(R.id.refresh_label)).getText().toString());
                 assertFalse("Refresh keeps the settings activity open",activity.isFinishing());
             });
@@ -272,6 +274,11 @@ public class UsageTest extends InstrumentationTestCase {
             assertTrue(Api.shortResetLabel(java.time.Instant.parse("2026-10-07T07:51:00Z")),Api.shortResetLabel(java.time.Instant.parse("2026-10-07T07:51:00Z")).matches("\\S+ 07:51"));
             assertEquals("sesja wygasła",Api.errorLabel("auth_expired"));
             assertEquals("źródło offline",Api.errorLabel("source_offline"));
+            assertEquals("HTTP 401",Api.failureReason(new Exception("HTTP 401")));
+            assertEquals("brak sieci lub DNS",Api.failureReason(new java.net.UnknownHostException("usage.example")));
+            assertEquals("przekroczony czas",Api.failureReason(new java.net.SocketTimeoutException()));
+            assertEquals("błąd TLS",Api.failureReason(new javax.net.ssl.SSLHandshakeException("x")));
+            assertEquals("JSONException",Api.failureReason(new org.json.JSONException("secret body")));
             org.json.JSONArray meters=new org.json.JSONObject("{\"meters\":[{\"label\":\"Grok\",\"windows\":[{\"label\":\"subscription\",\"usedPercent\":10.24,\"resetsAt\":null}],\"balance\":null,\"updatedAt\":\"2026-10-04T05:04:00Z\",\"stale\":false}]}").getJSONArray("meters");
             assertEquals("Najwyższe zużycie: 10% · stan 05:04",Api.summary(meters));
             assertEquals(0,Api.worstLevel(new org.json.JSONArray("["+balance()+"]")));
