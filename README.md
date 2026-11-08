@@ -158,8 +158,13 @@ retain the cached readings and visibly report the error.
 The Android scheduler refreshes approximately every 15 minutes, subject to
 Android battery/Doze scheduling. The 48 dp “Odśwież” button immediately shows a
 spinner and “Odświeżanie…” until the scheduled request finishes (at least 750 ms).
-Manual requests also run offline to report a connection error instead of waiting
-indefinitely; repeated taps during a refresh do not enqueue more requests.
+Manual requests declare a network requirement, because Android grants network
+access to a background job only when it asks for one. If the job has not started
+within 30 seconds (no network), the tap ends with `brak sieci` instead of spinning. A failed refresh names its
+cause in parentheses (for example `HTTP 401`, `brak sieci lub DNS`,
+`przekroczony czas`), never a response body or secret. Repeated taps during a
+refresh do not enqueue more requests. “Zapisz i sprawdź połączenie” stores the
+fetched snapshot, so a successful check also updates the widget.
 The API itself still polls providers every five minutes. Tap a card
 or the title to open `https://szymon.archea.dev`; the separate settings button
 opens configuration. The widget background does not open the website. A scrollable two-column card grid displays every account, including both GreenPT

@@ -33,6 +33,16 @@ final class Api {
             }
         } finally { conn.disconnect(); }
     }
+    // Short, secret-free cause shown next to a failed refresh. Our own checks throw plain
+    // Exception with a fixed message; anything else is reported by its type only.
+    static String failureReason(Exception e) {
+        if (e.getClass() == Exception.class && e.getMessage() != null) return e.getMessage();
+        if (e instanceof java.net.UnknownHostException) return "brak sieci lub DNS";
+        if (e instanceof java.net.SocketTimeoutException) return "przekroczony czas";
+        if (e instanceof java.net.ConnectException) return "brak połączenia";
+        if (e instanceof javax.net.ssl.SSLException) return "błąd TLS";
+        return e.getClass().getSimpleName();
+    }
     static String resetLabel(Instant date) {
         return DateTimeFormatter.ofPattern("EEEE, HH:mm",java.util.Locale.forLanguageTag("pl-PL")).withZone(ZoneId.systemDefault()).format(date);
     }

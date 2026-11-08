@@ -30,7 +30,7 @@ public class SettingsActivity extends Activity {
                 if(user.getText().toString().isEmpty()||user.getText().toString().contains(":" )||password.getText().toString().isEmpty())throw new Exception("Wpisz login i hasło");
                 JSONObject c=new JSONObject().put("url",address).put("username",user.getText().toString()).put("password",password.getText().toString());Secrets.save(this,c.toString());
                 status.setText("Sprawdzanie…");save.setEnabled(false);
-                new Thread(()->{String message;try{message=Api.render(Api.fetch(this));getSharedPreferences("usage",MODE_PRIVATE).edit().putString("readings",message).remove("error").commit();UsageWidget.draw(this);RefreshJob.schedule(this);}catch(Exception e){message="Nie udało się połączyć. Sprawdź adres, login i hasło.";}final String result=message;runOnUiThread(()->{status.setText(result);save.setEnabled(true);});}).start();
+                new Thread(()->{String message;try{org.json.JSONObject data=Api.fetch(this);message=Api.render(data);getSharedPreferences("usage",MODE_PRIVATE).edit().putString("snapshot",data.toString()).remove("error").commit();UsageWidget.draw(this);RefreshJob.schedule(this);}catch(Exception e){message="Nie udało się połączyć ("+Api.failureReason(e)+"). Sprawdź adres, login i hasło.";}final String result=message;runOnUiThread(()->{status.setText(result);save.setEnabled(true);});}).start();
             } catch(Exception e) {status.setText(e.getMessage());}
         });
     }
