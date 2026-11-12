@@ -90,7 +90,8 @@ public class UsageTest extends InstrumentationTestCase {
                 android.widget.ImageView fableBar=claudeWindows.getChildAt(2).findViewById(R.id.meter);
                 android.graphics.Bitmap fableBitmap=((android.graphics.drawable.BitmapDrawable)fableBar.getDrawable()).getBitmap();
                 assertEquals(UsageWidget.WARNING,fableBitmap.getPixel(fableBitmap.getWidth()/2,fableBitmap.getHeight()/2));
-                assertEquals(UsageWidget.TRACK,fableBitmap.getPixel(fableBitmap.getWidth()-1,fableBitmap.getHeight()/2));
+                // Sample inside the track, away from its antialiased rounded edge.
+                assertEquals(UsageWidget.TRACK,fableBitmap.getPixel(Math.round((fableBitmap.getWidth()-1)*0.95f),fableBitmap.getHeight()/2));
                 assertUnclipped(fable);
                 assertUnclipped(fablePercent);
                 assertEquals("Fresh cards hide their status line",android.view.View.GONE,claude.findViewById(R.id.provider_updated).getVisibility());
