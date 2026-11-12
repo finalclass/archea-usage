@@ -181,6 +181,51 @@ Deno.test("Claude limits come from five-hour and weekly windows", () => {
   assert(parseClaude({ five_hour: null }).length === 0);
   assert(parseClaude(null).length === 0);
 });
+Deno.test("Claude Fable quota is independent, optional, and keeps measured zero", () => {
+  const scoped = {
+    kind: "weekly_scoped",
+    percent: 82.5,
+    resets_at: "2026-11-10T12:00:00+00:00",
+    scope: { model: { display_name: "Fable" } },
+  };
+  const data = {
+    five_hour: { utilization: 9, resets_at: null },
+    seven_day: { utilization: 3, resets_at: "2026-11-09T23:00:00Z" },
+    limits: [
+      null,
+      { ...scoped, scope: { model: { display_name: "Opus" } } },
+      scoped,
+    ],
+  };
+  const windows = parseClaude(data);
+  assert(windows.length === 3);
+  assert(windows[1].usedPercent === 3);
+  assert(windows[2].label === "fable" && windows[2].usedPercent === 82.5);
+  assert(windows[2].resetsAt === "2026-11-10T12:00:00.000Z");
+  const pushed = parsePushed({ windows });
+  assert(pushed !== null && "windows" in pushed && pushed.windows.length === 3);
+  for (const percent of [0, 100]) {
+    const w = parseClaude({ limits: [{ ...scoped, percent }] });
+    assert(w.length === 1 && w[0].usedPercent === percent);
+  }
+  for (
+    const limits of [
+      undefined,
+      null,
+      {},
+      [],
+      [null, {}, { ...scoped, scope: null }],
+      [{ ...scoped, percent: null }],
+      [{ ...scoped, percent: "25" }],
+      [{ ...scoped, percent: Infinity }],
+      [{ ...scoped, kind: "weekly" }],
+      [{ ...scoped, scope: { model: { display_name: "Sonnet" } } }],
+    ]
+  ) {
+    const w = parseClaude({ ...data, limits });
+    assert(w.length === 2, "missing or unusable Fable is not a zero reading");
+  }
+});
 Deno.test("pushed readings accept only public, bounded numbers", () => {
   const ok = parsePushed({
     windows: [{
@@ -387,13 +432,21 @@ Deno.test("ROG collector reads Claude limits without exposing the token", async 
           JSON.stringify({
             five_hour: { utilization: 9, resets_at: "2026-11-05T12:50:00Z" },
             seven_day: { utilization: 3, resets_at: "2026-11-09T23:00:00Z" },
+            limits: [{
+              kind: "weekly_scoped",
+              percent: 82.5,
+              resets_at: "2026-11-10T12:00:00Z",
+              scope: { model: { display_name: "Fable" } },
+            }],
           }),
           { status },
         ),
       );
     };
     const reading = await readClaude(path, fake, now);
-    assert("windows" in reading && reading.windows.length === 2);
+    assert("windows" in reading && reading.windows.length === 3);
+    assert(reading.windows[2].label === "fable");
+    assert(reading.windows[2].usedPercent === 82.5);
     assert(!JSON.stringify(reading).includes("secret"));
     assert(
       seen[0] ===
@@ -442,6 +495,7 @@ Deno.test("compact cards use one line per limit and show status only on problems
       windows: [
         { label: "5h", usedPercent: 9, resetsAt: "2026-11-05T12:50:00Z" },
         { label: "weekly", usedPercent: 3, resetsAt: null },
+        { label: "fable", usedPercent: 82.5, resetsAt: "2026-11-10T12:00:00Z" },
       ],
     },
     { ...empty("grok", "provider_unavailable"), updatedAt: null },
@@ -453,6 +507,14 @@ Deno.test("compact cards use one line per limit and show status only on problems
       "5 h · do " + shortResetLabel("2026-11-05T12:50:00Z"),
   );
   assert(claude.windows[1].line === "Tydzień");
+  assert(claude.windows.length === 3 && claude.windows[2].label === "Fable");
+  assert(claude.windows[2].percentLabel === "82.5%");
+  assert(claude.windows[2].level === "warning");
+  assert(
+    claude.windows[2].line ===
+      "Fable · do " + shortResetLabel("2026-11-10T12:00:00Z"),
+  );
+  assert(claude.peakLabel === "82.5%" && claude.level === "warning");
   assert(/^\S+\. \d{2}:\d{2}$/.test(shortResetLabel("2026-11-05T12:50:00Z")));
   assert(
     r.cards[1].alert === true && r.cards[1].status.includes("awaria sieci"),

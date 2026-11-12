@@ -76,6 +76,7 @@ final class Api {
         if("weekly".equals(label)) return "Tydzień";
         if("subscription".equals(label)) return "Abonament";
         if("5h".equals(label)) return "5 h";
+        if("fable".equals(label)) return "Fable";
         return label;
     }
     static String percentLabel(double percent) {

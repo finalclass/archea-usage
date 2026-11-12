@@ -63,13 +63,23 @@ systemd user timer on ROG runs `rog/claude-push.ts` every five minutes. It reads
 the OAuth access token from `~/.claude/.credentials.json` (or
 `$CLAUDE_CONFIG_DIR`) read-only, calls
 `GET https://api.anthropic.com/api/oauth/usage` (internal endpoint, may change),
-and sends only the five-hour and weekly utilization with reset times to
+and sends only the five-hour, weekly, and (when available) Fable weekly
+utilization with their own reset times to
 `POST /v1/push/claude`. The token never leaves ROG and is never renewed by the
 collector, so Claude Code remains the only owner of its login. When the token
 has expired because Claude Code has not run for a while, the collector reports
 `auth_expired` (`sesja wygasła`) and the last reading stays visible as stale.
 If Archea receives nothing for three intervals (15 minutes), the card is marked
 `source_offline` (`źródło offline`), for example while ROG is asleep.
+
+Fable comes from the endpoint's `limits[]` entry with `kind: "weekly_scoped"`
+and `scope.model.display_name` identifying Fable; its `percent` and `resets_at`
+are independent of the all-models weekly window. Omarchy and Android show it
+as a third thin bar labelled `Fable` inside the Claude card, with the same
+80%/100% warning colors. A missing Fable quota is omitted, not reported as zero.
+Existing installations need the updated collector on ROG and updated clients
+to display the new label. Re-run `rog/install.ts` on ROG and `omarchy/install.ts`
+on the desktop from the updated source, and install the new Android APK.
 
 The push route uses its own bearer token, not the Basic Auth login of the
 widgets. Generate it on ROG and store the SHA-256 on Archea:

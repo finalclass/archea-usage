@@ -75,13 +75,24 @@ public class UsageTest extends InstrumentationTestCase {
                 assertEquals(2,row.getChildCount());
                 android.view.View claude=row.getChildAt(0);
                 assertEquals("Claude",((TextView)claude.findViewById(R.id.provider_name)).getText().toString());
-                assertEquals("9%",((TextView)claude.findViewById(R.id.provider_value)).getText().toString());
+                assertEquals("82.5%",((TextView)claude.findViewById(R.id.provider_value)).getText().toString());
                 ViewGroup claudeWindows=claude.findViewById(R.id.windows);
-                assertEquals(2,claudeWindows.getChildCount());
+                assertEquals(3,claudeWindows.getChildCount());
                 TextView fiveHours=claudeWindows.getChildAt(0).findViewById(R.id.window_label);
                 assertTrue(fiveHours.getText().toString(),fiveHours.getText().toString().matches("5 h · do \\S+ [0-9]{2}:[0-9]{2}"));
                 assertEquals("9%",((TextView)claudeWindows.getChildAt(0).findViewById(R.id.window_percent)).getText().toString());
                 assertEquals("3%",((TextView)claudeWindows.getChildAt(1).findViewById(R.id.window_percent)).getText().toString());
+                TextView fable=claudeWindows.getChildAt(2).findViewById(R.id.window_label);
+                assertEquals("Fable · do "+Api.shortResetLabel(java.time.Instant.parse("2026-11-10T12:00:00Z")),fable.getText().toString());
+                TextView fablePercent=claudeWindows.getChildAt(2).findViewById(R.id.window_percent);
+                assertEquals("82.5%",fablePercent.getText().toString());
+                assertEquals(UsageWidget.WARNING,fablePercent.getCurrentTextColor());
+                android.widget.ImageView fableBar=claudeWindows.getChildAt(2).findViewById(R.id.meter);
+                android.graphics.Bitmap fableBitmap=((android.graphics.drawable.BitmapDrawable)fableBar.getDrawable()).getBitmap();
+                assertEquals(UsageWidget.WARNING,fableBitmap.getPixel(fableBitmap.getWidth()/2,fableBitmap.getHeight()/2));
+                assertEquals(UsageWidget.TRACK,fableBitmap.getPixel(fableBitmap.getWidth()-1,fableBitmap.getHeight()/2));
+                assertUnclipped(fable);
+                assertUnclipped(fablePercent);
                 assertEquals("Fresh cards hide their status line",android.view.View.GONE,claude.findViewById(R.id.provider_updated).getVisibility());
                 assertUnclipped(fiveHours);
                 android.view.View grok=row.getChildAt(1);
@@ -243,7 +254,7 @@ public class UsageTest extends InstrumentationTestCase {
         return "{\"label\":\""+name+"\",\"windows\":[{\"label\":\"weekly\",\"usedPercent\":"+percent+",\"resetsAt\":\"2026-10-07T07:51:00Z\"}],\"balance\":null,\"updatedAt\":\"2026-10-02T00:00:00Z\",\"stale\":false}";
     }
     static String claude() {
-        return "{\"label\":\"Claude\",\"windows\":[{\"label\":\"5h\",\"usedPercent\":9,\"resetsAt\":\"2026-11-05T12:50:00Z\"},{\"label\":\"weekly\",\"usedPercent\":3,\"resetsAt\":\"2026-11-09T23:00:00Z\"}],\"balance\":null,\"updatedAt\":\"2026-11-05T10:00:00Z\",\"stale\":false,\"error\":null}";
+        return "{\"label\":\"Claude\",\"windows\":[{\"label\":\"5h\",\"usedPercent\":9,\"resetsAt\":\"2026-11-05T12:50:00Z\"},{\"label\":\"weekly\",\"usedPercent\":3,\"resetsAt\":\"2026-11-09T23:00:00Z\"},{\"label\":\"fable\",\"usedPercent\":82.5,\"resetsAt\":\"2026-11-10T12:00:00Z\"}],\"balance\":null,\"updatedAt\":\"2026-11-05T10:00:00Z\",\"stale\":false,\"error\":null}";
     }
     static String balance() {
         return "{\"label\":\"OpenRouter\",\"windows\":[],\"balance\":{\"amount\":0.41,\"currency\":\"USD\"},\"updatedAt\":\"2026-10-02T00:00:00Z\",\"stale\":false}";

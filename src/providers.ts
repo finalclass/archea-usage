@@ -97,6 +97,21 @@ export function parseClaude(data: any): Window[] {
       });
     }
   }
+  // Fable is a separate model-scoped weekly quota in limits[], not seven_day.
+  const fable = Array.isArray(data?.limits)
+    ? data.limits.find((w: any) =>
+      w?.kind === "weekly_scoped" &&
+      typeof w.scope?.model?.display_name === "string" &&
+      /\bfable\b/i.test(w.scope.model.display_name) && num(w.percent)
+    )
+    : undefined;
+  if (fable) {
+    windows.push({
+      label: "fable",
+      usedPercent: fable.percent,
+      resetsAt: reset(fable.resets_at),
+    });
+  }
   return windows;
 }
 export const pushErrors = new Set([

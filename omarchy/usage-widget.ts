@@ -30,6 +30,8 @@ export function windowLabel(label: string): string {
     ? "Abonament"
     : label === "5h"
     ? "5 h"
+    : label === "fable"
+    ? "Fable"
     : label;
 }
 export function percentLabel(percent: number): string {
