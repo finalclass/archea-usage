@@ -252,7 +252,7 @@ public class UsageTest extends InstrumentationTestCase {
                 int index=position-list.getFirstVisiblePosition();
                 if(index>=0 && index<list.getChildCount()) {
                     ViewGroup row=list.getChildAt(index).findViewById(R.id.card_row);
-                    String expected=position==0?"Claude":position==1?"Codex":"GreenPT · moje";
+                    String expected=position==0?"Claude":position==1?"Codex":position==2?"GreenPT · moje":"Antigravity · Gemini";
                     if(row!=null && row.getChildCount()>0) {
                         TextView label=row.getChildAt(0).findViewById(R.id.provider_name);
                         if(label!=null && expected.equals(label.getText().toString()))found[0]=row;

@@ -99,7 +99,7 @@ async function pushed(
   } catch {
     return reply(400);
   }
-  const reading = parsePushed(body);
+  const reading = parsePushed(body, id);
   if (!reading) return reply(400);
   cache.accept(id, reading);
   return reply(204);

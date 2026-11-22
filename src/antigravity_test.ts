@@ -1,4 +1,8 @@
-import { parseAntigravity, readAntigravity } from "../rog/antigravity-push.ts";
+import {
+  parseAntigravity,
+  publishAntigravity,
+  readAntigravity,
+} from "../rog/antigravity-push.ts";
 import { empty, meterIds } from "./providers.ts";
 import { Cache } from "./cache.ts";
 import { handler, hash } from "./http.ts";
@@ -128,4 +132,75 @@ Deno.test("Antigravity push reaches clients; last good quota survives collector 
     cache.snapshot().meters.find((m) => m.id === "antigravity")!.error ===
       "source_offline",
   );
+});
+
+Deno.test("Antigravity rejects malformed resets instead of inventing dates", () => {
+  for (const date of ["12", ["2026-11-29T08:59:36Z"], 42, {}, "not-a-date"]) {
+    const data: any = fixture();
+    data.command.data.groups[0].buckets[0].reset_time = date;
+    let failed = false;
+    try {
+      parseAntigravity(data);
+    } catch {
+      failed = true;
+    }
+    assert(failed);
+  }
+});
+Deno.test("Antigravity push sanitizes invalid secrets and transport errors", async () => {
+  const reading = { windows: parseAntigravity(fixture()) };
+  let calls = 0;
+  const fetcher: typeof fetch = async (_url, init) => {
+    calls++;
+    assert(
+      new Headers(init?.headers).get("Authorization") === "Bearer test-token",
+    );
+    throw new Error("private Authorization: Bearer test-token");
+  };
+  assert(
+    await publishAntigravity(
+      { url: "https://example.com", token: "secret\nvalue" },
+      reading,
+      fetcher,
+    ) === null,
+  );
+  assert(calls === 0);
+  assert(
+    await publishAntigravity(
+      { url: "https://example.com", token: "test-token" },
+      reading,
+      fetcher,
+    ) === null,
+  );
+  assert(calls === 1);
+});
+Deno.test("Antigravity cadence is independent of server polls and push cannot exceed 100 percent", async () => {
+  let now = 1_800_000_000_000;
+  const cache = new Cache(
+    async (id) => empty(id),
+    60,
+    ["antigravity"],
+    () => now,
+  );
+  cache.accept("antigravity", { windows: parseAntigravity(fixture()) });
+  now += 181_000;
+  assert(!cache.snapshot().meters[0].stale);
+  now += 720_000;
+  assert(cache.snapshot().meters[0].error === "source_offline");
+  const app = handler(
+    cache,
+    { username: "unused", passwordHash: await hash("unused") },
+    "/unused",
+    { tokenHash: await hash("push") },
+  );
+  const response = await app(
+    new Request("https://usage.test/v1/push/antigravity", {
+      method: "POST",
+      headers: { Authorization: "Bearer push" },
+      body: JSON.stringify({
+        windows: [{ label: "gemini-weekly", usedPercent: 110, resetsAt: null }],
+      }),
+    }),
+  );
+  assert(response.status === 400);
 });

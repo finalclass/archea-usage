@@ -1,6 +1,5 @@
 // Uses the signed-in CLI's quota command. No model turn or credential copying.
 import { reset, type Window } from "../src/providers.ts";
-import { pushUrl } from "./claude-push.ts";
 
 type Reading = { windows: Window[] } | { error: string };
 type Result = { success: boolean; stdout: string };
@@ -27,6 +26,15 @@ export function parseAntigravity(data: any): Window[] {
         fraction < 0 || fraction > 1 ||
         windows.some((w) => w.label === bucket.id)
       ) throw new Error("invalid_response");
+      if (
+        bucket.reset_time != null &&
+        (typeof bucket.reset_time !== "string" ||
+          !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(
+            bucket.reset_time,
+          ))
+      ) {
+        throw new Error("invalid_response");
+      }
       const resetsAt = reset(bucket.reset_time);
       if (bucket.reset_time != null && !resetsAt) {
         throw new Error("invalid_response");
@@ -89,34 +97,64 @@ export async function readAntigravity(
   }
 }
 
+type PushConfig = { url: string; token: string };
+export function antigravityPushUrl(base: string): URL {
+  const url = new URL("/v1/push/antigravity", base);
+  const local = url.hostname === "127.0.0.1" || url.hostname === "localhost";
+  if (
+    url.username || url.password ||
+    (url.protocol !== "https:" && !(local && url.protocol === "http:"))
+  ) {
+    throw new Error("invalid_configuration");
+  }
+  return url;
+}
+export async function publishAntigravity(
+  config: PushConfig,
+  reading: Reading,
+  fetchImpl: typeof fetch = fetch,
+): Promise<number | null> {
+  try {
+    if (
+      typeof config.token !== "string" || !/^[\x21-\x7e]+$/.test(config.token)
+    ) return null;
+    const response = await fetchImpl(antigravityPushUrl(config.url), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(reading),
+      redirect: "error",
+      signal: AbortSignal.timeout(15000),
+    });
+    await response.body?.cancel().catch(() => {});
+    return response.status;
+  } catch {
+    // Even invalid header errors can include the secret. Never propagate them.
+    return null;
+  }
+}
 if (import.meta.main) {
-  const home = Deno.env.get("HOME")!;
-  const config = JSON.parse(
-    await Deno.readTextFile(
-      Deno.args[0] ?? `${home}/.config/archea-usage/push.json`,
-    ),
-  );
-  // Reuse the existing push secret; only public quota readings leave ROG.
-  const url = pushUrl(config.url);
-  url.pathname = "/v1/push/antigravity";
-  const reading = await readAntigravity(Deno.args[1] ?? "agy");
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${config.token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(reading),
-    redirect: "error",
-    signal: AbortSignal.timeout(15000),
-  });
-  await response.body?.cancel().catch(() => {});
-  console.log(
-    `Antigravity: ${
-      "windows" in reading
-        ? `${reading.windows.length} quota windows`
-        : reading.error
-    }; Archea HTTP ${response.status}`,
-  );
-  if (response.status !== 204) Deno.exitCode = 1;
+  try {
+    const home = Deno.env.get("HOME")!;
+    const config = JSON.parse(
+      await Deno.readTextFile(
+        Deno.args[0] ?? `${home}/.config/archea-usage/push.json`,
+      ),
+    );
+    const reading = await readAntigravity(Deno.args[1] ?? "agy");
+    const status = await publishAntigravity(config, reading);
+    console.log(
+      `Antigravity: ${
+        "windows" in reading
+          ? `${reading.windows.length} quota windows`
+          : reading.error
+      }; Archea ${status === null ? "push_failed" : `HTTP ${status}`}`,
+    );
+    if (status !== 204) Deno.exitCode = 1;
+  } catch {
+    console.error("Antigravity: collector_failed");
+    Deno.exitCode = 1;
+  }
 }

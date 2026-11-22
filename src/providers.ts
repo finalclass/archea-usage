@@ -125,6 +125,7 @@ export const pushErrors = new Set([
 // Validates a reading pushed by a remote collector. Only public numbers pass.
 export function parsePushed(
   body: unknown,
+  id?: string,
 ): { windows: Window[] } | { error: string } | null {
   if (!body || typeof body !== "object" || Array.isArray(body)) return null;
   const row = body as Record<string, unknown>;
@@ -142,7 +143,10 @@ export function parsePushed(
     if (typeof w.label !== "string" || !/^[a-z0-9-]{1,32}$/.test(w.label)) {
       return null;
     }
-    if (!num(w.usedPercent) || w.usedPercent < 0 || w.usedPercent > 1000) {
+    if (
+      !num(w.usedPercent) || w.usedPercent < 0 ||
+      w.usedPercent > (id === "antigravity" ? 100 : 1000)
+    ) {
       return null;
     }
     const resetsAt = w.resetsAt == null ? null : reset(w.resetsAt);

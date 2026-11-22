@@ -8,14 +8,13 @@ const api = `${target.hostname}:${
   target.port || (target.protocol === "http:" ? 80 : 443)
 }`;
 const base = new URL("../", import.meta.url);
-const dest = `${home}/.local/share/archea-usage`;
+const dest = `${home}/.local/share/archea-usage-antigravity`;
 for (const dir of ["rog", "src"]) {
   await Deno.mkdir(`${dest}/${dir}`, { recursive: true });
 }
 for (
   const name of [
     "rog/antigravity-push.ts",
-    "rog/claude-push.ts",
     "src/providers.ts",
     "src/auth.ts",
   ]
