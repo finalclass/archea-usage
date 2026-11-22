@@ -53,7 +53,12 @@ public class UsageTest extends InstrumentationTestCase {
                     row.layout(0,0,width,row.getMeasuredHeight());
                     assertUnclipped(card.findViewById(R.id.provider_name));
                     assertUnclipped(card.findViewById(R.id.provider_value));
+                    assertEquals("100%",((TextView)card.findViewById(R.id.provider_value)).getText().toString());
+                    assertNoRemainingWording(card);
                     ViewGroup windows=card.findViewById(R.id.windows);
+                    assertEquals("87.5%",((TextView)windows.getChildAt(0).findViewById(R.id.window_percent)).getText().toString());
+                    assertEquals("100%",((TextView)windows.getChildAt(1).findViewById(R.id.window_percent)).getText().toString());
+                    assertEquals("0%",((TextView)windows.getChildAt(2).findViewById(R.id.window_percent)).getText().toString());
                     for(int i=0;i<windows.getChildCount();i++) {
                         assertUnclipped(windows.getChildAt(i).findViewById(R.id.window_label));
                         assertUnclipped(windows.getChildAt(i).findViewById(R.id.window_percent));
@@ -181,13 +186,20 @@ public class UsageTest extends InstrumentationTestCase {
                 assertEquals(1,rowFour.getChildCount());
                 android.view.View ag=rowFour.getChildAt(0);
                 assertEquals("Antigravity · Gemini",((TextView)ag.findViewById(R.id.provider_name)).getText().toString());
-                assertEquals("0%",((TextView)ag.findViewById(R.id.provider_value)).getText().toString());
-                assertEquals(android.view.View.VISIBLE,ag.findViewById(R.id.quota_kind).getVisibility());
+                assertEquals("100%",((TextView)ag.findViewById(R.id.provider_value)).getText().toString());
+                assertEquals(UsageWidget.CRITICAL,((TextView)ag.findViewById(R.id.provider_value)).getCurrentTextColor());
+                assertNoRemainingWording(ag);
                 ViewGroup windows=ag.findViewById(R.id.windows);
                 assertEquals(3,windows.getChildCount());
-                assertEquals("12.5%",((TextView)windows.getChildAt(0).findViewById(R.id.window_percent)).getText().toString());
-                assertEquals("100%",((TextView)windows.getChildAt(2).findViewById(R.id.window_percent)).getText().toString());
+                assertEquals("87.5%",((TextView)windows.getChildAt(0).findViewById(R.id.window_percent)).getText().toString());
+                assertEquals("100%",((TextView)windows.getChildAt(1).findViewById(R.id.window_percent)).getText().toString());
+                assertEquals("0%",((TextView)windows.getChildAt(2).findViewById(R.id.window_percent)).getText().toString());
                 assertEquals(UsageWidget.WARNING,((TextView)windows.getChildAt(0).findViewById(R.id.window_percent)).getCurrentTextColor());
+                assertEquals(UsageWidget.CRITICAL,((TextView)windows.getChildAt(1).findViewById(R.id.window_percent)).getCurrentTextColor());
+                assertEquals(UsageWidget.ACCENT,((TextView)windows.getChildAt(2).findViewById(R.id.window_percent)).getCurrentTextColor());
+                // The bar fills to the consumed share: 87.5% used is filled at 80% and empty at 95%.
+                assertEquals(UsageWidget.WARNING,barPixel(ag,0.8f));
+                assertEquals(UsageWidget.TRACK,barPixel(ag,0.95f));
                 assertTrue(((TextView)windows.getChildAt(0).findViewById(R.id.window_label)).getText().toString().startsWith("Gemini · tydzień · do "));
                 assertUnclipped(ag.findViewById(R.id.provider_name));
                 assertUnclipped(ag.findViewById(R.id.provider_value));
@@ -196,7 +208,10 @@ public class UsageTest extends InstrumentationTestCase {
                     assertUnclipped(windows.getChildAt(i).findViewById(R.id.window_percent));
                 }
             });
-            assertTrue(Api.render(new JSONObject("{\"meters\":["+antigravity()+"]}")).contains("12.5% pozostało"));
+            String agText=Api.render(new JSONObject("{\"meters\":["+antigravity()+"]}"));
+            assertTrue(agText,agText.contains("Gemini · tydzień 88% zużyte"));
+            assertTrue(agText,agText.contains("Argon · tydzień 0% zużyte"));
+            assertFalse(agText,agText.toLowerCase(java.util.Locale.ROOT).contains("pozosta"));
             assertEquals(Intent.ACTION_VIEW,UsageWidget.websiteIntent().getAction());
             assertEquals("https://szymon.archea.dev",UsageWidget.websiteIntent().getDataString());
             ViewGroup clickRow=showRow(view[0],0);
@@ -269,6 +284,13 @@ public class UsageTest extends InstrumentationTestCase {
         });
         throw new AssertionError("Widget row "+position+" did not load;"+debug);
     }
+    private void assertNoRemainingWording(android.view.View view) {
+        if(view instanceof TextView) {
+            String text=((TextView)view).getText().toString();
+            if(view.getVisibility()==android.view.View.VISIBLE) assertFalse(text,text.toLowerCase(java.util.Locale.ROOT).contains("pozosta"));
+        }
+        if(view instanceof ViewGroup) for(int i=0;i<((ViewGroup)view).getChildCount();i++) assertNoRemainingWording(((ViewGroup)view).getChildAt(i));
+    }
     private void describeViews(android.view.View view,StringBuilder debug) {
         debug.append("\n").append(view.getClass().getSimpleName()).append(" id=").append(view.getId()).append(" size=").append(view.getWidth()).append("x").append(view.getHeight());
         if(view instanceof ViewGroup)for(int i=0;i<((ViewGroup)view).getChildCount();i++)describeViews(((ViewGroup)view).getChildAt(i),debug);
@@ -299,6 +321,9 @@ public class UsageTest extends InstrumentationTestCase {
     }
     static String antigravity() {
         return "{\"id\":\"antigravity\",\"label\":\"Antigravity · Gemini\",\"windows\":[{\"label\":\"gemini-weekly\",\"usedPercent\":87.5,\"resetsAt\":\"2026-11-29T08:59:36Z\"},{\"label\":\"gemini-5h\",\"usedPercent\":100,\"resetsAt\":\"2026-11-22T13:59:36Z\"},{\"label\":\"gemini-argon-wtu-weekly\",\"usedPercent\":0,\"resetsAt\":\"2026-11-29T08:59:36Z\"}],\"balance\":null,\"spend\":null,\"updatedAt\":\"2026-11-22T09:00:00Z\",\"stale\":false,\"error\":null}";
+    }
+    static String antigravityUsed(int used) {
+        return "{\"id\":\"antigravity\",\"label\":\"Antigravity · Gemini\",\"windows\":[{\"label\":\"gemini-weekly\",\"usedPercent\":"+used+",\"resetsAt\":null}],\"balance\":null,\"spend\":null,\"updatedAt\":\"2026-11-22T09:00:00Z\",\"stale\":false,\"error\":null}";
     }
     static String meter(String name,int percent) {
         return "{\"label\":\""+name+"\",\"windows\":[{\"label\":\"weekly\",\"usedPercent\":"+percent+",\"resetsAt\":\"2026-10-07T07:51:00Z\"}],\"balance\":null,\"updatedAt\":\"2026-10-02T00:00:00Z\",\"stale\":false}";
@@ -343,6 +368,13 @@ public class UsageTest extends InstrumentationTestCase {
             org.json.JSONArray meters=new org.json.JSONObject("{\"meters\":[{\"label\":\"Grok\",\"windows\":[{\"label\":\"subscription\",\"usedPercent\":10.24,\"resetsAt\":null}],\"balance\":null,\"updatedAt\":\"2026-10-04T05:04:00Z\",\"stale\":false}]}").getJSONArray("meters");
             assertEquals("Najwyższe zużycie: 10% · stan 05:04",Api.summary(meters));
             assertEquals(0,Api.worstLevel(new org.json.JSONArray("["+balance()+"]")));
+            // Antigravity usedPercent is already consumption (100 - remaining); it is never inverted again.
+            String mixed="["+meter("Claude",86)+","+meter("Codex",30)+","+meter("Grok",18)+","+antigravityUsed(0)+"]";
+            assertEquals("Najwyższe zużycie: 86% · stan 09:00",Api.summary(new org.json.JSONArray(mixed)));
+            assertEquals(1,Api.worstLevel(new org.json.JSONArray(mixed)));
+            assertEquals("Najwyższe zużycie: 0% · stan 09:00",Api.summary(new org.json.JSONArray("["+antigravityUsed(0)+"]")));
+            assertEquals(0,Api.worstLevel(new org.json.JSONArray("["+antigravityUsed(0)+"]")));
+            for(int used:new int[]{0,50,79,80,99,100}) assertEquals(used>=100?2:used>=80?1:0,Api.level(new JSONObject(antigravityUsed(used))));
             android.graphics.Bitmap low=UsageWidget.meterBitmap(100,8,UsageWidget.ACCENT,2);
             android.graphics.Bitmap high=UsageWidget.meterBitmap(100,8,UsageWidget.ACCENT,12);
             assertEquals(UsageWidget.ACCENT,low.getPixel(2,4));

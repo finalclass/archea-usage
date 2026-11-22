@@ -90,14 +90,8 @@ export function render(meters: Meter[], _now = Date.now()) {
     const peak = m.windows.length
       ? Math.max(...m.windows.map((w) => w.usedPercent))
       : null;
-    const quotaLabel = (used: number) =>
-      m.id === "antigravity"
-        ? percentLabel(100 - used) + " pozostało"
-        : percentLabel(used);
     const lines = m.windows.map((w) => {
-      return windowLabel(w.label) + ": " + (m.id === "antigravity"
-        ? quotaLabel(w.usedPercent)
-        : w.usedPercent + "% zużyte") +
+      return windowLabel(w.label) + ": " + w.usedPercent + "% zużyte" +
         "\n" +
         (w.resetsAt ? "Reset: " + resetLabel(w.resetsAt) : "Brak daty resetu");
     });
@@ -141,10 +135,7 @@ export function render(meters: Meter[], _now = Date.now()) {
       stale: m.stale,
       // Compact cards show the status line only when something needs attention.
       alert: m.stale || problem !== null,
-      quotaKind: m.id === "antigravity" ? "Pozostały limit" : null,
-      peakLabel: peak === null
-        ? null
-        : percentLabel(m.id === "antigravity" ? 100 - peak : peak),
+      peakLabel: peak === null ? null : percentLabel(peak),
       balance: m.balance
         ? {
           amount: money(m.balance.amount),
@@ -155,9 +146,7 @@ export function render(meters: Meter[], _now = Date.now()) {
       windows: m.windows.map((w) => ({
         label: windowLabel(w.label),
         percent: w.usedPercent,
-        percentLabel: percentLabel(
-          m.id === "antigravity" ? 100 - w.usedPercent : w.usedPercent,
-        ),
+        percentLabel: percentLabel(w.usedPercent),
         level: level(w.usedPercent),
         reset: w.resetsAt ? shortResetLabel(w.resetsAt) : null,
         line: windowLabel(w.label) +
