@@ -30,6 +30,7 @@ export type Meter = {
 };
 export const labels: Record<string, string> = {
   claude: "Claude",
+  antigravity: "Antigravity · Gemini",
   grok: "Grok",
   codex: "Codex",
   openrouter: "OpenRouter",
@@ -37,7 +38,7 @@ export const labels: Record<string, string> = {
 };
 export const activeMeterIds = ["codex", "grok", "openrouter", "greenpt"];
 // Pushed meters are measured on another machine and sent to /v1/push/<id>.
-export const pushedMeterIds = ["claude"];
+export const pushedMeterIds = ["claude", "antigravity"];
 export function empty(id: string, error: string | null = null): Meter {
   return {
     id,
@@ -59,6 +60,16 @@ export function reset(x: unknown): string | null {
     ? new Date(x < 1e12 ? x * 1000 : x)
     : new Date(String(x));
   return Number.isFinite(d.getTime()) ? d.toISOString() : null;
+}
+// Antigravity reports UTC RFC3339 timestamps, never local dates or epoch values.
+export function utcReset(value: unknown): string | null {
+  if (
+    typeof value !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(value)
+  ) return null;
+  const normalized = reset(value);
+  // Date normalizes impossible calendar dates such as February 30: reject those.
+  return normalized?.slice(0, 19) === value.slice(0, 19) ? normalized : null;
 }
 export function parseCodex(data: any): Window[] {
   return [data.rate_limit?.primary_window, data.rate_limit?.secondary_window]
@@ -124,6 +135,7 @@ export const pushErrors = new Set([
 // Validates a reading pushed by a remote collector. Only public numbers pass.
 export function parsePushed(
   body: unknown,
+  id?: string,
 ): { windows: Window[] } | { error: string } | null {
   if (!body || typeof body !== "object" || Array.isArray(body)) return null;
   const row = body as Record<string, unknown>;
@@ -141,10 +153,17 @@ export function parsePushed(
     if (typeof w.label !== "string" || !/^[a-z0-9-]{1,32}$/.test(w.label)) {
       return null;
     }
-    if (!num(w.usedPercent) || w.usedPercent < 0 || w.usedPercent > 1000) {
+    if (
+      !num(w.usedPercent) || w.usedPercent < 0 ||
+      w.usedPercent > (id === "antigravity" ? 100 : 1000)
+    ) {
       return null;
     }
-    const resetsAt = w.resetsAt == null ? null : reset(w.resetsAt);
+    const resetsAt = w.resetsAt == null
+      ? null
+      : id === "antigravity"
+      ? utcReset(w.resetsAt)
+      : reset(w.resetsAt);
     if (w.resetsAt != null && (typeof w.resetsAt !== "string" || !resetsAt)) {
       return null;
     }

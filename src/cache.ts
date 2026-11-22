@@ -77,7 +77,11 @@ export class Cache {
   private current(meter: Meter): Meter {
     if (!pushedMeterIds.includes(meter.id)) return meter;
     const at = this.received.get(meter.id);
-    if (at !== undefined && this.now() - at <= this.pushStaleMs) return meter;
+    // Antigravity has its own fixed five-minute collector timer.
+    const staleMs = meter.id === "antigravity"
+      ? 15 * 60 * 1000
+      : this.pushStaleMs;
+    if (at !== undefined && this.now() - at <= staleMs) return meter;
     return { ...meter, stale: true, error: "source_offline" };
   }
   snapshot() {
