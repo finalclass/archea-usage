@@ -135,7 +135,16 @@ Deno.test("Antigravity push reaches clients; last good quota survives collector 
 });
 
 Deno.test("Antigravity rejects malformed resets instead of inventing dates", () => {
-  for (const date of ["12", ["2026-11-29T08:59:36Z"], 42, {}, "not-a-date"]) {
+  for (
+    const date of [
+      "12",
+      ["2026-11-29T08:59:36Z"],
+      42,
+      {},
+      "not-a-date",
+      "2026-02-30T08:59:36Z",
+    ]
+  ) {
     const data: any = fixture();
     data.command.data.groups[0].buckets[0].reset_time = date;
     let failed = false;
@@ -203,4 +212,38 @@ Deno.test("Antigravity cadence is independent of server polls and push cannot ex
     }),
   );
   assert(response.status === 400);
+});
+
+Deno.test("Antigravity HTTP push rejects malformed and impossible dates before updating cache", async () => {
+  const cache = new Cache(async (id) => empty(id), 300, ["antigravity"]);
+  const app = handler(
+    cache,
+    { username: "unused", passwordHash: await hash("unused") },
+    "/unused",
+    { tokenHash: await hash("push") },
+  );
+  const push = (resetsAt: unknown) =>
+    app(
+      new Request("https://usage.test/v1/push/antigravity", {
+        method: "POST",
+        headers: { Authorization: "Bearer push" },
+        body: JSON.stringify({
+          windows: [{ label: "gemini-weekly", usedPercent: 10, resetsAt }],
+        }),
+      }),
+    );
+  for (
+    const invalid of [
+      "12",
+      ["2026-11-29T08:59:36Z"],
+      42,
+      {},
+      "2026-02-30T08:59:36Z",
+    ]
+  ) {
+    assert((await push(invalid)).status === 400);
+    assert(cache.meters[0].updatedAt === null);
+  }
+  assert((await push("2026-11-29T08:59:36.123Z")).status === 204);
+  assert(cache.meters[0].windows[0].resetsAt === "2026-11-29T08:59:36.123Z");
 });

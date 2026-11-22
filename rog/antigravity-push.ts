@@ -1,5 +1,5 @@
 // Uses the signed-in CLI's quota command. No model turn or credential copying.
-import { reset, type Window } from "../src/providers.ts";
+import { utcReset, type Window } from "../src/providers.ts";
 
 type Reading = { windows: Window[] } | { error: string };
 type Result = { success: boolean; stdout: string };
@@ -26,16 +26,7 @@ export function parseAntigravity(data: any): Window[] {
         fraction < 0 || fraction > 1 ||
         windows.some((w) => w.label === bucket.id)
       ) throw new Error("invalid_response");
-      if (
-        bucket.reset_time != null &&
-        (typeof bucket.reset_time !== "string" ||
-          !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(
-            bucket.reset_time,
-          ))
-      ) {
-        throw new Error("invalid_response");
-      }
-      const resetsAt = reset(bucket.reset_time);
+      const resetsAt = utcReset(bucket.reset_time);
       if (bucket.reset_time != null && !resetsAt) {
         throw new Error("invalid_response");
       }

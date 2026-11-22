@@ -61,6 +61,16 @@ export function reset(x: unknown): string | null {
     : new Date(String(x));
   return Number.isFinite(d.getTime()) ? d.toISOString() : null;
 }
+// Antigravity reports UTC RFC3339 timestamps, never local dates or epoch values.
+export function utcReset(value: unknown): string | null {
+  if (
+    typeof value !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(value)
+  ) return null;
+  const normalized = reset(value);
+  // Date normalizes impossible calendar dates such as February 30: reject those.
+  return normalized?.slice(0, 19) === value.slice(0, 19) ? normalized : null;
+}
 export function parseCodex(data: any): Window[] {
   return [data.rate_limit?.primary_window, data.rate_limit?.secondary_window]
     .filter((w) => w && num(w.used_percent))
@@ -149,7 +159,11 @@ export function parsePushed(
     ) {
       return null;
     }
-    const resetsAt = w.resetsAt == null ? null : reset(w.resetsAt);
+    const resetsAt = w.resetsAt == null
+      ? null
+      : id === "antigravity"
+      ? utcReset(w.resetsAt)
+      : reset(w.resetsAt);
     if (w.resetsAt != null && (typeof w.resetsAt !== "string" || !resetsAt)) {
       return null;
     }
