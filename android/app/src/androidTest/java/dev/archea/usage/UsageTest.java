@@ -297,13 +297,16 @@ public class UsageTest extends InstrumentationTestCase {
     }
     private void assertUnclipped(TextView text) {
         android.text.Layout layout=text.getLayout();
-        assertNotNull("Text is laid out",layout);
-        assertEquals("All text is laid out",text.getText().length(),layout.getLineEnd(layout.getLineCount()-1));
+        String id=text.getId()==android.view.View.NO_ID ? "no-id" : text.getResources().getResourceEntryName(text.getId());
+        assertNotNull("Text is laid out: "+id,layout);
+        assertEquals("All text is laid out: "+id,text.getText().length(),layout.getLineEnd(layout.getLineCount()-1));
+        int available=text.getWidth()-text.getCompoundPaddingLeft()-text.getCompoundPaddingRight();
         for(int line=0;line<layout.getLineCount();line++) {
-            assertEquals("No ellipsis",0,layout.getEllipsisCount(line));
-            assertTrue("Text fits the width",layout.getLineWidth(line)<=text.getWidth()-text.getCompoundPaddingLeft()-text.getCompoundPaddingRight()+1);
+            String detail=id+" line "+line+" \""+text.getText().subSequence(layout.getLineStart(line),layout.getLineEnd(line))+"\" lineWidth="+layout.getLineWidth(line)+" lineMax="+layout.getLineMax(line)+" available="+available+" layoutWidth="+layout.getWidth()+" textSizePx="+text.getTextSize()+" density="+text.getResources().getDisplayMetrics().density+" text=\""+text.getText()+"\"";
+            assertEquals("No ellipsis: "+detail,0,layout.getEllipsisCount(line));
+            assertTrue("Text fits the width: "+detail,layout.getLineWidth(line)<=available+1);
         }
-        assertTrue("Text fits the height",layout.getHeight()<=text.getHeight()-text.getCompoundPaddingTop()-text.getCompoundPaddingBottom());
+        assertTrue("Text fits the height: "+id+" layoutHeight="+layout.getHeight()+" available="+(text.getHeight()-text.getCompoundPaddingTop()-text.getCompoundPaddingBottom()),layout.getHeight()<=text.getHeight()-text.getCompoundPaddingTop()-text.getCompoundPaddingBottom());
     }
     private void waitForRefresh(AppWidgetHostView view,boolean loading,long timeout) throws Exception {
         long deadline=android.os.SystemClock.elapsedRealtime()+timeout;
