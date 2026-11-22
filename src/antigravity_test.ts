@@ -279,6 +279,7 @@ Deno.test("Antigravity remaining quota becomes consumption exactly once from col
   for (
     const [remaining, used, label, level] of [
       [1, 0, "0%", "normal"],
+      [0.9, 10, "10%", "normal"],
       [0.5, 50, "50%", "normal"],
       [0.2, 80, "80%", "warning"],
       [0.21, 79, "79%", "normal"],
@@ -294,6 +295,8 @@ Deno.test("Antigravity remaining quota becomes consumption exactly once from col
     assert(card.peakLabel === label && card.level === level);
     assert(card.windows[0].percentLabel === label);
     assert(card.windows[0].level === level);
+    // Floating point noise (0.9 remaining -> 9.999999999999998) never reaches the text.
+    assert(card.value.startsWith("Gemini · tydzień: " + label + " zużyte\n"));
     // The bar fill is the consumed share, as on every other card.
     assert(Math.abs(card.windows[0].percent - used) < 1e-9);
   }

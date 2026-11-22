@@ -91,7 +91,8 @@ export function render(meters: Meter[], _now = Date.now()) {
       ? Math.max(...m.windows.map((w) => w.usedPercent))
       : null;
     const lines = m.windows.map((w) => {
-      return windowLabel(w.label) + ": " + w.usedPercent + "% zużyte" +
+      return windowLabel(w.label) + ": " + percentLabel(w.usedPercent) +
+        " zużyte" +
         "\n" +
         (w.resetsAt ? "Reset: " + resetLabel(w.resetsAt) : "Brak daty resetu");
     });
