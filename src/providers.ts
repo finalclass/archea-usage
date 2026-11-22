@@ -30,6 +30,7 @@ export type Meter = {
 };
 export const labels: Record<string, string> = {
   claude: "Claude",
+  antigravity: "Antigravity · Gemini",
   grok: "Grok",
   codex: "Codex",
   openrouter: "OpenRouter",
@@ -37,7 +38,7 @@ export const labels: Record<string, string> = {
 };
 export const activeMeterIds = ["codex", "grok", "openrouter", "greenpt"];
 // Pushed meters are measured on another machine and sent to /v1/push/<id>.
-export const pushedMeterIds = ["claude"];
+export const pushedMeterIds = ["claude", "antigravity"];
 export function empty(id: string, error: string | null = null): Meter {
   return {
     id,

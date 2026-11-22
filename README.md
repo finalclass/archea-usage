@@ -207,3 +207,33 @@ Stop/disable only
 `archea-usage.service`, remove only its Caddy site, validate/reload Caddy, and
 remove only the `usageproxy` Incus proxy device to roll back. Preserve the
 private credentials/signing key and avoid changing Operators or T3.
+
+## Antigravity / Gemini
+
+On the machine already signed into Antigravity CLI (`agy` 1.5.14 or newer),
+`agy -p /usage --output-format json` returns the official quota panel as
+`command.data.groups[].buckets[]`. This slash command makes no model turn
+(`num_turns: 0`, zero inference tokens). The ROG collector reads the structured
+`remaining_fraction` and `reset_time` for Gemini groups, including the separate
+Gemini 4 Argon pool. It does not infer quotas from token counts or use Gemini
+API billing. The CLI owns login and refresh; no Google credentials are copied.
+
+With the existing private `~/.config/archea-usage/push.json` configured:
+
+```
+deno run --allow-env=HOME,PATH --allow-read --allow-write rog/install-antigravity.ts /absolute/path/to/agy
+systemctl --user daemon-reload
+systemctl --user enable --now archea-usage-antigravity.timer
+systemctl --user start archea-usage-antigravity.service
+```
+
+Only public quota percentages and UTC reset times are sent to
+`POST /v1/push/antigravity` using the existing push secret. Polling is every five
+minutes; CLI failures preserve the previous reading, and three missed polls
+mark the source offline. CLI stdout/stderr and credentials are never logged.
+The API keeps its existing `usedPercent` convention; updated Omarchy and Android
+cards label Antigravity as “Pozostały limit” and show `100 - usedPercent`.
+Warning colors and thin bars still represent consumption, as on other cards.
+Reset dates use the device timezone. Missing resets remain unknown, and an
+invalid/missing quota is never reported as a full or empty pool. Updating the
+service, collector, desktop plugin and APK is required for the complete view.

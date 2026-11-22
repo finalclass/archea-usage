@@ -263,7 +263,9 @@ Deno.test("Claude push needs its own token and becomes stale when ROG stops", as
   const home = await Deno.makeTempDir();
   try {
     const ids = await meterIds(home, null, { pushed: true });
-    assert(ids.join(",") === "claude,codex,grok,openrouter,greenpt");
+    assert(
+      ids.join(",") === "claude,antigravity,codex,grok,openrouter,greenpt",
+    );
     const cache = new Cache(
       (id) => {
         polled.push(id);
@@ -737,7 +739,7 @@ Deno.test("both GreenPT accounts are collected, cached and rendered independentl
     assert((await meterIds(home, " original-test-key ")).length === 4);
     assert(
       (await meterIds(home, "additional-test-key", { pushed: true })).join() ===
-        "claude,codex,grok,openrouter,greenpt_opencode,greenpt",
+        "claude,antigravity,codex,grok,openrouter,greenpt_opencode,greenpt",
     );
     let failOriginal = false;
     const keys: string[] = [];

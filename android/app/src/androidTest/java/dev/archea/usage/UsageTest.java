@@ -38,6 +38,30 @@ public class UsageTest extends InstrumentationTestCase {
         assertEquals("awaria sieci",Api.errorLabel("provider_unavailable"));
         assertEquals("0.00001815",Api.money(0.00001815));
     }
+    public void testAntigravityNarrowCard() throws Exception {
+        Context context=getInstrumentation().getTargetContext();
+        Activity activity=getInstrumentation().startActivitySync(new Intent(context,SettingsActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        try {
+            getInstrumentation().runOnMainSync(()->{
+                try {
+                    android.widget.LinearLayout row=new android.widget.LinearLayout(activity);
+                    android.view.View card=UsageWidget.card(context,new JSONObject(antigravity()),200,10).apply(activity,row);
+                    row.addView(card);
+                    float density=context.getResources().getDisplayMetrics().density;
+                    int width=Math.round(125*density);
+                    row.measure(android.view.View.MeasureSpec.makeMeasureSpec(width,android.view.View.MeasureSpec.EXACTLY),android.view.View.MeasureSpec.makeMeasureSpec(0,android.view.View.MeasureSpec.UNSPECIFIED));
+                    row.layout(0,0,width,row.getMeasuredHeight());
+                    assertUnclipped(card.findViewById(R.id.provider_name));
+                    assertUnclipped(card.findViewById(R.id.provider_value));
+                    ViewGroup windows=card.findViewById(R.id.windows);
+                    for(int i=0;i<windows.getChildCount();i++) {
+                        assertUnclipped(windows.getChildAt(i).findViewById(R.id.window_label));
+                        assertUnclipped(windows.getChildAt(i).findViewById(R.id.window_percent));
+                    }
+                } catch(Exception error) { throw new RuntimeException(error); }
+            });
+        } finally { getInstrumentation().runOnMainSync(activity::finish); }
+    }
     public void testSettingsAndWidgetRendering() throws Exception {
         Context context=getInstrumentation().getTargetContext();
         Intent intent=new Intent(context,SettingsActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -55,7 +79,7 @@ public class UsageTest extends InstrumentationTestCase {
             long idleDeadline=android.os.SystemClock.elapsedRealtime()+3000;
             while(RefreshJob.isRefreshing() && android.os.SystemClock.elapsedRealtime()<idleDeadline)Thread.sleep(20);
             assertFalse("Initial refresh stopped",RefreshJob.isRefreshing());
-            String snapshot="{\"meters\":["+claude()+","+meter("Grok",80)+","+meter("Codex",100)+","+balance()+","+greenpt()+","+secondGreenpt()+"]}";
+            String snapshot="{\"meters\":["+claude()+","+meter("Grok",80)+","+meter("Codex",100)+","+balance()+","+greenpt()+","+secondGreenpt()+","+antigravity()+"]}";
             context.getSharedPreferences("usage",Context.MODE_PRIVATE).edit().putString("snapshot",snapshot).remove("error").commit();
             final AppWidgetHostView[] view=new AppWidgetHostView[1];
             getInstrumentation().runOnMainSync(()->{
@@ -71,7 +95,7 @@ public class UsageTest extends InstrumentationTestCase {
             ViewGroup rowOne=showRow(view[0],0);
             getInstrumentation().runOnMainSync(()->{
                 ViewGroup row=rowOne;
-                assertEquals("All six providers remain accessible",3,((android.widget.ListView)view[0].findViewById(R.id.cards)).getCount());
+                assertEquals("All seven providers remain accessible",4,((android.widget.ListView)view[0].findViewById(R.id.cards)).getCount());
                 assertEquals(2,row.getChildCount());
                 android.view.View claude=row.getChildAt(0);
                 assertEquals("Claude",((TextView)claude.findViewById(R.id.provider_name)).getText().toString());
@@ -152,6 +176,27 @@ public class UsageTest extends InstrumentationTestCase {
                 assertTrue(readings.getText().toString().startsWith("Najwyższe zużycie: 100%"));
                 assertEquals(android.graphics.Color.parseColor("#ff7078"),readings.getCurrentTextColor());
             });
+            ViewGroup rowFour=showRow(view[0],3);
+            getInstrumentation().runOnMainSync(()->{
+                assertEquals(1,rowFour.getChildCount());
+                android.view.View ag=rowFour.getChildAt(0);
+                assertEquals("Antigravity · Gemini",((TextView)ag.findViewById(R.id.provider_name)).getText().toString());
+                assertEquals("0%",((TextView)ag.findViewById(R.id.provider_value)).getText().toString());
+                assertEquals(android.view.View.VISIBLE,ag.findViewById(R.id.quota_kind).getVisibility());
+                ViewGroup windows=ag.findViewById(R.id.windows);
+                assertEquals(3,windows.getChildCount());
+                assertEquals("12.5%",((TextView)windows.getChildAt(0).findViewById(R.id.window_percent)).getText().toString());
+                assertEquals("100%",((TextView)windows.getChildAt(2).findViewById(R.id.window_percent)).getText().toString());
+                assertEquals(UsageWidget.WARNING,((TextView)windows.getChildAt(0).findViewById(R.id.window_percent)).getCurrentTextColor());
+                assertTrue(((TextView)windows.getChildAt(0).findViewById(R.id.window_label)).getText().toString().startsWith("Gemini · tydzień · do "));
+                assertUnclipped(ag.findViewById(R.id.provider_name));
+                assertUnclipped(ag.findViewById(R.id.provider_value));
+                for(int i=0;i<windows.getChildCount();i++) {
+                    assertUnclipped(windows.getChildAt(i).findViewById(R.id.window_label));
+                    assertUnclipped(windows.getChildAt(i).findViewById(R.id.window_percent));
+                }
+            });
+            assertTrue(Api.render(new JSONObject("{\"meters\":["+antigravity()+"]}")).contains("12.5% pozostało"));
             assertEquals(Intent.ACTION_VIEW,UsageWidget.websiteIntent().getAction());
             assertEquals("https://szymon.archea.dev",UsageWidget.websiteIntent().getDataString());
             ViewGroup clickRow=showRow(view[0],0);
@@ -172,6 +217,7 @@ public class UsageTest extends InstrumentationTestCase {
                 assertUnclipped(visibleBalances.getChildAt(0).findViewById(R.id.balance_amount));
                 assertUnclipped(visibleBalances.getChildAt(1).findViewById(R.id.balance_amount));
             });
+            showRow(view[0],3);
             android.graphics.Bitmap screenshot=getInstrumentation().getUiAutomation().takeScreenshot();
             try(java.io.FileOutputStream out=new java.io.FileOutputStream(new java.io.File(context.getExternalFilesDir(null),"widget.png"))) {
                 screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);
@@ -250,6 +296,9 @@ public class UsageTest extends InstrumentationTestCase {
             Thread.sleep(20);
         }
         fail("Refresh did not enter "+(loading?"loading":"idle")+" state");
+    }
+    static String antigravity() {
+        return "{\"id\":\"antigravity\",\"label\":\"Antigravity · Gemini\",\"windows\":[{\"label\":\"gemini-weekly\",\"usedPercent\":87.5,\"resetsAt\":\"2026-11-29T08:59:36Z\"},{\"label\":\"gemini-5h\",\"usedPercent\":100,\"resetsAt\":\"2026-11-22T13:59:36Z\"},{\"label\":\"gemini-argon-wtu-weekly\",\"usedPercent\":0,\"resetsAt\":\"2026-11-29T08:59:36Z\"}],\"balance\":null,\"spend\":null,\"updatedAt\":\"2026-11-22T09:00:00Z\",\"stale\":false,\"error\":null}";
     }
     static String meter(String name,int percent) {
         return "{\"label\":\""+name+"\",\"windows\":[{\"label\":\"weekly\",\"usedPercent\":"+percent+",\"resetsAt\":\"2026-10-07T07:51:00Z\"}],\"balance\":null,\"updatedAt\":\"2026-10-02T00:00:00Z\",\"stale\":false}";

@@ -65,9 +65,10 @@ public class UsageWidget extends AppWidgetProvider {
         for(int i=0;i<windows.length();i++) peak=Math.max(peak,windows.getJSONObject(i).getDouble("usedPercent"));
         if(windows.length()==0) card.setViewVisibility(R.id.provider_value,View.GONE);
         else {
-            card.setTextViewText(R.id.provider_value,Api.percentLabel(peak));
+            card.setTextViewText(R.id.provider_value,Api.quotaLabel(meter,peak));
             card.setTextColor(R.id.provider_value,levelColor(level));
         }
+        card.setViewVisibility(R.id.quota_kind,"antigravity".equals(meter.optString("id"))?View.VISIBLE:View.GONE);
         card.removeAllViews(R.id.windows);
         for(int i=0;i<windows.length();i++) {
             JSONObject window=windows.getJSONObject(i);
@@ -77,7 +78,7 @@ public class UsageWidget extends AppWidgetProvider {
             row.setTextViewText(R.id.window_label,Api.windowLine(window));
             if(windows.length()>1) {
                 row.setViewVisibility(R.id.window_percent,View.VISIBLE);
-                row.setTextViewText(R.id.window_percent,Api.percentLabel(percent));
+                row.setTextViewText(R.id.window_percent,Api.quotaLabel(meter,percent));
                 row.setTextColor(R.id.window_percent,levelColor(windowLevel));
             }
             row.setImageViewBitmap(R.id.meter,meterBitmap(barWidth,barHeight,levelColor(windowLevel),percent));

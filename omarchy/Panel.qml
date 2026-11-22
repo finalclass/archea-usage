@@ -101,6 +101,13 @@ Item {
                 }
             }
 
+            Text {
+                visible: !!card.meter.quotaKind
+                text: card.meter.quotaKind || ""
+                color: root.muted
+                font.pixelSize: 11
+            }
+
             Repeater {
                 model: card.hasWindows ? card.meter.windows : []
                 Column {
@@ -118,7 +125,8 @@ Item {
                             text: modelData.line || modelData.label
                             color: modelData.reset ? "#d5dee6" : root.muted
                             font.pixelSize: 11
-                            elide: Text.ElideRight
+                            wrapMode: card.meter.id === "antigravity" ? Text.Wrap : Text.NoWrap
+                            elide: card.meter.id === "antigravity" ? Text.ElideNone : Text.ElideRight
                         }
                         Text {
                             id: windowPercent
