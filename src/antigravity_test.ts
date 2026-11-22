@@ -172,7 +172,7 @@ Deno.test("Antigravity push sanitizes invalid secrets and transport errors", asy
       fetcher,
     ) === null,
   );
-  assert(calls === 1);
+  assert(Number(calls) === 1);
 });
 Deno.test("Antigravity cadence is independent of server polls and push cannot exceed 100 percent", async () => {
   let now = 1_800_000_000_000;
