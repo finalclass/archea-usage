@@ -72,9 +72,6 @@ final class Api {
         }
         return peak<0 ? 0 : percentLevel(peak);
     }
-    static String quotaLabel(JSONObject meter,double used) {
-        return "antigravity".equals(meter.optString("id")) ? percentLabel(100-used) : percentLabel(used);
-    }
     static String windowLabel(String label) {
         if("gemini-weekly".equals(label)) return "Gemini · tydzień";
         if("gemini-5h".equals(label)) return "Gemini · 5 h";
@@ -159,8 +156,7 @@ final class Api {
                 JSONObject w=windows.getJSONObject(j);
                 if(j>0)result.append("\n  ");
                 result.append("antigravity".equals(m.optString("id")) ? windowLabel(w.getString("label")) : w.getString("label")).append(" ");
-                if("antigravity".equals(m.optString("id"))) result.append(quotaLabel(m,w.getDouble("usedPercent"))).append(" pozostało");
-                else result.append(Math.round(w.getDouble("usedPercent"))).append("% zużyte");
+                result.append(Math.round(w.getDouble("usedPercent"))).append("% zużyte");
                 if(!w.isNull("resetsAt")) {
                     Instant reset=Instant.parse(w.getString("resetsAt"));
                     result.append("\n  Reset: ").append(resetLabel(reset));

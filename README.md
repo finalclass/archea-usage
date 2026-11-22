@@ -231,9 +231,11 @@ Only public quota percentages and UTC reset times are sent to
 `POST /v1/push/antigravity` using the existing push secret. Polling is every five
 minutes; CLI failures preserve the previous reading, and three missed polls
 mark the source offline. CLI stdout/stderr and credentials are never logged.
-The API keeps its existing `usedPercent` convention; updated Omarchy and Android
-cards label Antigravity as “Pozostały limit” and show `100 - usedPercent`.
-Warning colors and thin bars still represent consumption, as on other cards.
+The collector converts the CLI's remaining share into consumption once
+(`usedPercent = 100 - remaining`), and every client shows Antigravity exactly
+like Claude, Codex and Grok: the percentage used, the same 80%/100% warning
+colors, bars filled to the consumed share, and the card counts toward
+“Najwyższe zużycie”. An untouched Gemini pool therefore shows 0%.
 Reset dates use the device timezone. Missing resets remain unknown, and an
 invalid/missing quota is never reported as a full or empty pool. Updating the
 service, collector, desktop plugin and APK is required for the complete view.

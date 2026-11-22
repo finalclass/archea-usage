@@ -101,13 +101,6 @@ Item {
                 }
             }
 
-            Text {
-                visible: !!card.meter.quotaKind
-                text: card.meter.quotaKind || ""
-                color: root.muted
-                font.pixelSize: 11
-            }
-
             Repeater {
                 model: card.hasWindows ? card.meter.windows : []
                 Column {
